@@ -1,0 +1,3305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基于DeepSeek的AI股票分析</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        /* CSS变量 - 默认浅色模式 */
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1f2328;
+            --card-bg: #f6f8fa;
+            --border-color: #d1d9e0;
+            --input-bg: #ffffff;
+            --hover-bg: #f3f4f6;
+            --gray-400: #656d76;
+            --gray-500: #8b949e;
+            --primary-color: #238636;
+            --primary-hover: #2ea043;
+            --blue-400: #0969da;
+            --red-400: #cf222e;
+            --green-400: #1a7f37;
+        }
+        
+        /* 深色模式变量 */
+        body[data-theme="dark"] {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --card-bg: #161b22;
+            --border-color: #30363d;
+            --input-bg: #0d1117;
+            --hover-bg: #21262d;
+            --gray-400: #8b949e;
+            --gray-500: #6e7681;
+            --primary-color: #238636;
+            --primary-hover: #2ea043;
+            --blue-400: #58a6ff;
+            --red-400: #f85149;
+            --green-400: #7ee787;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            padding: 1rem;
+        }
+        
+        @media (min-width: 768px) {
+            body {
+                padding: 1.5rem;
+            }
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        
+        .stream-box {
+            line-height: 1.8;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+        
+        .stream-box p {
+            margin-bottom: 1.2rem;
+        }
+        
+        .stream-box h2,
+        .stream-box h3 {
+            font-weight: bold;
+            margin: 1.5rem 0 0.8rem 0;
+            color: var(--blue-400);
+        }
+        
+        .stream-box h2 {
+            font-size: 1.5rem;
+        }
+        
+        .stream-box h3 {
+            font-size: 1.25rem;
+        }
+        
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 13px;
+        }
+        
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 10px;
+            text-align: left;
+            transition: all 0.2s ease;
+        }
+        
+        th {
+            background: var(--hover-bg);
+            color: var(--gray-400);
+            font-weight: bold;
+        }
+        
+        tr:hover td {
+            background: rgba(88, 166, 255, 0.05);
+        }
+        
+        .highlight {
+            color: var(--blue-400);
+            font-weight: bold;
+        }
+        
+        .market-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        
+        .market-item {
+            background: var(--hover-bg);
+            border-radius: 6px;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+        
+        .market-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .market-label {
+            font-size: 12px;
+            color: var(--gray-400);
+            margin-bottom: 4px;
+        }
+        
+        .market-value {
+            font-size: 16px;
+            font-weight: 500;
+        }
+        
+        .market-value.positive {
+            color: var(--red-400);
+        }
+        
+        .market-value.negative {
+            color: var(--green-400);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(88, 166, 255, 0.4);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(88, 166, 255, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(88, 166, 255, 0);
+            }
+        }
+        
+        /* 输入框样式 */
+        input[type="text"],
+        input[type="password"],
+        input[type="number"] {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+        
+        input[type="text"]:focus,
+        input[type="password"]:focus,
+        input[type="number"]:focus {
+            outline: none;
+            border-color: var(--blue-400);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+        
+        /* 历史记录项样式 */
+        .history-item {
+            transition: all 0.3s ease;
+        }
+        
+        .history-item:hover {
+            background-color: var(--hover-bg);
+        }
+        
+        /* 历史记录列表项悬停样式 */
+        #historyList > div:hover {
+            background-color: var(--hover-bg);
+        }
+        
+        /* 主题切换按钮样式 */
+        #themeToggle {
+            transition: all 0.3s ease;
+        }
+        
+        #themeToggle:hover {
+            background-color: var(--hover-bg);
+        }
+        
+        /* 按钮样式 */
+        button {
+            transition: all 0.3s ease;
+        }
+        
+        /* 搜索结果项悬停样式 */
+        .stock-item:hover {
+            background-color: var(--hover-bg);
+        }
+        
+        /* 下拉菜单和带层级部分样式 */
+        #userMenu {
+            background-color: var(--card-bg);
+            border-color: var(--border-color);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        #searchResults {
+            background-color: var(--input-bg);
+            border-color: var(--border-color);
+        }
+        
+        /* 模型选择下拉框 */
+        #modelSelect {
+            background-color: var(--input-bg);
+            color: var(--text-color);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            /* 基础字体大小 */
+            body {
+                font-size: 16px;
+                padding: 0.5rem;
+            }
+            
+            /* 主容器宽度 */
+            .max-w-6xl.mx-auto {
+                width: 95%;
+                max-width: 100%;
+            }
+            
+            /* 标题大小 */
+            h1 {
+                font-size: 1.5rem;
+            }
+            
+            h2 {
+                font-size: 1.25rem;
+            }
+            
+            h3 {
+                font-size: 1.1rem;
+            }
+            
+            /* 头部导航 */
+            .flex.justify-between.items-center.mb-6 {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+            
+            .flex.justify-between.items-center.mb-6 > div {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+            }
+            
+            /* 按钮大小 */
+            button {
+                font-size: 1rem;
+                padding: 0.875rem 1.75rem;
+                min-height: 44px;
+            }
+            
+            /* 输入框大小 */
+            input {
+                font-size: 1rem;
+                padding: 0.875rem;
+                min-height: 44px;
+            }
+            
+            /* 网格布局 */
+            .market-grid {
+                grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                gap: 10px;
+            }
+            
+            /* 卡片样式 */
+            .card {
+                padding: 1.25rem;
+            }
+            
+            /* 表单布局 */
+            #stockForm {
+                gap: 1rem;
+                grid-template-columns: 1fr !important;
+            }
+            
+            #stockForm > div {
+                grid-column: 1 !important;
+            }
+            
+            /* 移动端历史按钮 */
+            #mobileHistoryBtn {
+                bottom: 20px;
+                left: 20px;
+                width: 64px;
+                height: 64px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.75rem;
+            }
+            
+            /* 进度条 */
+            #progressBarContainer {
+                padding: 1rem;
+            }
+            
+            /* 新闻列表和分析报告 */
+            #newsList,
+            #streamOutput {
+                font-size: 1rem;
+            }
+        }
+        
+        /* PC端调整 */
+        @media (min-width: 769px) {
+            /* 基础字体大小 */
+            body {
+                font-size: 16px;
+                padding: 1.5rem;
+            }
+            
+            /* 标题大小 */
+            h1 {
+                font-size: 2rem;
+            }
+            
+            h2 {
+                font-size: 1.5rem;
+            }
+            
+            h3 {
+                font-size: 1.25rem;
+            }
+        }
+        </style>
+</head>
+<body data-theme="light">
+
+<div class="max-w-6xl mx-auto">
+    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+        <h1 class="text-2xl font-bold flex items-center gap-2">📊 AI 股票穿透分析系统</h1>
+        <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+            <button type="button" id="exportBtn" class="flex items-center gap-2 px-4 py-2 rounded-full border border-border-color hover:bg-hover-bg transition-colors">
+                📤 导出
+            </button>
+            <div class="flex items-center gap-2 px-4 py-2 rounded-full border border-border-color bg-hover-bg">
+                <span class="text-gray-400">模型:</span>
+                <select id="modelSelect" class="bg-input-bg border-none text-sm outline-none focus:ring-0">
+                    <option value="deepseek-chat">标准模式</option>
+                    <option value="deepseek-reasoner">思考模式</option>
+                </select>
+            </div>
+            <button type="button" id="themeToggle" class="flex items-center gap-2 px-4 py-2 rounded-full border border-border-color hover:bg-hover-bg transition-colors">
+                <span class="dark-icon hidden">🌙</span>
+                <span class="light-icon">☀️</span>
+                <span class="dark-text hidden">深色模式</span>
+                <span class="light-text">浅色模式</span>
+            </button>
+            <div id="userInfo" class="flex items-center gap-3 flex-1 lg:flex-none">
+                <button type="button" id="loginBtn" class="flex items-center gap-2 px-4 py-2 rounded-full border border-border-color hover:bg-hover-bg transition-colors">
+                    🔐 登录
+                </button>
+                <div id="userPoints" class="hidden flex items-center gap-2 px-4 py-2 rounded-full border border-border-color bg-hover-bg">
+                    <span>💎</span>
+                    <span id="pointsValue">0</span>
+                </div>
+                <div id="userDropdown" class="hidden">
+                    <button type="button" id="userMenuBtn" class="flex items-center gap-2 px-4 py-2 rounded-full border border-border-color hover:bg-hover-bg transition-colors">
+                        <span id="userName">用户</span>
+                        <span>▼</span>
+                    </button>
+                    <div id="userMenu" class="hidden absolute right-4 top-20 bg-card-bg border border-border-color rounded-lg shadow-lg py-2 z-50">
+                    <button type="button" id="updateUserBtn" class="w-full text-left px-4 py-2 hover:bg-hover-bg transition-colors">
+                        👤 修改信息
+                    </button>
+                    <button type="button" id="changePasswordBtn" class="w-full text-left px-4 py-2 hover:bg-hover-bg transition-colors">
+                        🔒 修改密码
+                    </button>
+                    <button type="button" id="refreshPointsBtn" class="w-full text-left px-4 py-2 hover:bg-hover-bg transition-colors">
+                        🔄 刷新积分
+                    </button>
+                    <button type="button" id="rechargeBtn" class="w-full text-left px-4 py-2 hover:bg-hover-bg transition-colors">
+                        ⚡ 充值
+                    </button>
+                    <button type="button" id="pointsHistoryBtn" class="w-full text-left px-4 py-2 hover:bg-hover-bg transition-colors">
+                        📋 积分历史
+                    </button>
+                    <button type="button" id="logoutBtn" class="w-full text-left px-4 py-2 hover:bg-hover-bg transition-colors">
+                        🚪 退出登录
+                    </button>
+                </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 移动端历史按钮 -->
+    <button type="button" id="mobileHistoryBtn" class="lg:hidden fixed bottom-20 left-4 bg-card-bg border border-border-color rounded-full p-3 shadow-lg z-40">
+        📋
+    </button>
+    
+    <!-- 功能内容容器 -->
+    <div id="functionalityContainer" class="hidden">
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- 左侧历史记录 -->
+            <div class="lg:w-1/3 hidden lg:block" id="historyContainer">
+                <div id="historyCard" class="card p-6 sticky top-4">
+                    <h3 class="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span> 历史分析记录
+                    </h3>
+                    <div id="historyList" class="overflow-y-auto max-h-[calc(100vh-200px)]">
+                        <div class="text-gray-400 text-center py-8" id="emptyHistory">
+                            暂无历史分析记录
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧主要内容 -->
+            <div class="lg:w-2/3 space-y-6">
+                <div class="card p-6">
+                    <form id="stockForm" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <input type="hidden" name="apiKey" id="hiddenApiKeyInput">
+                <input type="hidden" name="model" id="hiddenModelInput">
+                
+
+                <div class="md:col-span-3">
+                    <label class="block text-xs text-gray-500 mb-1">股票/基金名称搜索</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="stockName" placeholder="输入股票/基金名称" class="flex-1 bg-input-bg border border-border-color rounded p-2 outline-none">
+                        <button type="button" id="searchBtn" class="btn-primary text-white font-bold py-2 px-4 rounded">搜索</button>
+                    </div>
+                    <div id="searchResults" class="mt-2 bg-input-bg border border-border-color rounded p-2 max-h-60 overflow-y-auto hidden"></div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">股票/基金代码 (如: 000001/518880)</label>
+                    <input type="text" name="symbol" required placeholder="000001/518880" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">持有数量 / 成本</label>
+                    <div class="flex gap-1">
+                        <input type="number" name="shares" placeholder="股" class="w-1/2 bg-input-bg border border-border-color rounded p-2 outline-none">
+                        <input type="number" step="0.01" name="cost" placeholder="成本" class="w-1/2 bg-input-bg border border-border-color rounded p-2 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1">可用资金</label>
+                    <input type="number" name="cash" value="10000" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none">
+                </div>
+                
+                <!-- 复盘数据输入 -->
+                <div class="md:col-span-3">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-xs text-gray-500">复盘数据</label>
+                        <button type="button" id="addReviewBtn" class="text-xs text-blue-400 hover:text-blue-300">添加记录</button>
+                    </div>
+                    <div id="reviewDataContainer" class="space-y-3">
+                        <!-- 复盘记录将在这里动态添加 -->
+                    </div>
+                    <div id="emptyReviewHint" class="text-xs text-gray-400 text-center py-4">
+                        点击"添加记录"按钮录入当天的买卖数据
+                    </div>
+                </div>
+                
+                <!-- 资讯设置 -->
+                <div class="md:col-span-3">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="fullContentToggle" name="fullContent" class="w-4 h-4">
+                        <label for="fullContentToggle" class="text-sm">获取全部资讯正文内容（默认只截取500字符）</label>
+                    </div>
+                </div>
+                
+                <button type="submit" id="submitBtn" class="md:col-span-3 btn-primary text-white font-bold py-3 rounded mt-2 shadow-lg">开始实时数据分析</button>
+            </form>
+        </div>
+
+        <div id="marketDataCard" class="card p-6 hidden">
+            <h3 class="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2">
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> 实时盘口数据 (腾讯财经)
+            </h3>
+            <div id="fullDataTable" class="overflow-x-auto">
+                </div>
+        </div>
+
+        <div id="newsCard" class="card p-6 hidden">
+            <h3 class="text-sm font-bold text-gray-400 mb-3 flex items-center gap-2">
+                <span class="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span> 最新资讯 (新浪财经)
+            </h3>
+            <div id="newsList" class="overflow-y-auto max-h-96">
+                </div>
+        </div>
+
+        <div id="reportCard" class="card p-8 hidden">
+            <div id="streamOutput" class="stream-box text-sm md:text-base"></div>
+        </div>
+    </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 登录提示 -->
+    <div id="loginPrompt" class="text-center py-12">
+        <div class="max-w-md mx-auto">
+            <div class="card p-8">
+                <h2 class="text-2xl font-bold mb-6">请先登录</h2>
+                <p class="text-gray-400 mb-8">登录后即可使用AI股票分析系统的所有功能</p>
+                <button type="button" id="loginPromptBtn" class="btn-primary text-white font-bold py-3 px-8 rounded">
+                    立即登录
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 页脚和免责声明 -->
+    <footer class="mt-8 pt-6 border-t border-border-color">
+        <div class="max-w-6xl mx-auto">
+            <div class="card p-6">
+                <h3 class="text-sm font-bold text-yellow-500 mb-3 flex items-center gap-2">
+                    <span>⚠️</span> 风险提示与免责声明
+                </h3>
+                <div class="text-xs text-gray-400 space-y-2">
+                    <p><strong>重要提示：</strong>本系统仅供学习、研究和参考使用，所有分析结果和数据均不构成任何投资建议或交易指导。</p>
+                    <p><strong>风险提示：</strong>股票、基金等金融产品投资存在风险，投资者应根据自身情况谨慎决策，自行承担投资风险。</p>
+                    <p><strong>数据来源：</strong>市场数据来源于东方财富、腾讯财经、新浪财经等公开渠道，本系统不保证数据的准确性、完整性和及时性。</p>
+                    <p><strong>使用限制：</strong>请勿将本系统的分析结果用于实际投资决策，如需投资建议，请咨询持牌金融机构或专业投资顾问。</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+</div>
+
+<!-- 固定在底部的进度条 -->
+<div class="fixed bottom-0 left-0 right-0 p-4 bg-card-bg border-t border-border-color hidden opacity-100" style="opacity: 1;" id="progressBarContainer">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-1">
+            <span class="text-xs text-gray-500" id="progressMessage">准备开始...</span>
+            <span class="text-xs text-gray-500" id="progressPercentage">0%</span>
+        </div>
+        <div class="w-full bg-input-bg border border-border-color rounded-full h-2">
+            <div id="progressBar" class="bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+        </div>
+    </div>
+</div>
+
+
+
+<!-- 导出选项模态框 -->
+<div id="exportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="card p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold">导出</h2>
+            <button type="button" id="closeExportBtn" class="text-gray-400 hover:text-gray-200">
+                ✕
+            </button>
+        </div>
+        <div class="space-y-6">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">导出格式</label>
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        <input type="radio" id="exportPdf" name="exportFormat" value="pdf" checked class="mr-2">
+                        <label for="exportPdf">PDF</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="radio" id="exportImage" name="exportFormat" value="image" class="mr-2">
+                        <label for="exportImage">图片</label>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">导出内容</label>
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        <input type="checkbox" id="exportMarketData" name="exportContent" value="marketData" checked class="mr-2">
+                        <label for="exportMarketData">盘口数据</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="exportNews" name="exportContent" value="news" checked class="mr-2">
+                        <label for="exportNews">最新资讯</label>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="exportAnalysis" name="exportContent" value="analysis" checked class="mr-2">
+                        <label for="exportAnalysis">分析数据</label>
+                    </div>
+                </div>
+            </div>
+            <div class="pt-4">
+                <button type="button" id="startExportBtn" class="btn-primary text-white font-bold py-2 px-4 rounded w-full">开始导出</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 移动端历史记录模态框 -->
+<div id="mobileHistoryModal" class="lg:hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="card p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold">历史分析记录</h2>
+            <button type="button" id="closeMobileHistoryBtn" class="text-gray-400 hover:text-gray-200">
+                ✕
+            </button>
+        </div>
+        <div id="mobileHistoryList" class="overflow-y-auto max-h-[calc(80vh-100px)]">
+            <div class="text-gray-400 text-center py-8" id="mobileEmptyHistory">
+                暂无历史分析记录
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 登录模态框 -->
+<div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="card p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold">用户登录</h2>
+            <button type="button" id="closeLoginBtn" class="text-gray-400 hover:text-gray-200">
+                ✕
+            </button>
+        </div>
+        <div class="space-y-6">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">用户名</label>
+                <input type="text" id="loginUsername" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">密码</label>
+                <input type="password" id="loginPassword" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div class="pt-4">
+                <button type="button" id="submitLoginBtn" class="btn-primary text-white font-bold py-2 px-4 rounded w-full">登录</button>
+            </div>
+            <div class="text-center pt-4">
+                <span class="text-gray-400">还没有账号？</span>
+                <button type="button" id="switchToRegisterBtn" class="text-blue-400 hover:text-blue-300 ml-1">立即注册</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 注册模态框 -->
+<div id="registerModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="card p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold">用户注册</h2>
+            <button type="button" id="closeRegisterBtn" class="text-gray-400 hover:text-gray-200">
+                ✕
+            </button>
+        </div>
+        <div class="space-y-6">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">用户名</label>
+                <input type="text" id="registerUsername" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">密码</label>
+                <input type="password" id="registerPassword" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">昵称</label>
+                <input type="text" id="registerNickname" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div class="pt-4">
+                <button type="button" id="submitRegisterBtn" class="btn-primary text-white font-bold py-2 px-4 rounded w-full">注册</button>
+            </div>
+            <div class="text-center pt-4">
+                <span class="text-gray-400">已有账号？</span>
+                <button type="button" id="switchToLoginBtn" class="text-blue-400 hover:text-blue-300 ml-1">立即登录</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 修改密码模态框 -->
+<div id="changePasswordModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="card p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold">修改密码</h2>
+            <button type="button" id="closeChangePasswordBtn" class="text-gray-400 hover:text-gray-200">
+                ✕
+            </button>
+        </div>
+        <div class="space-y-6">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">原密码</label>
+                <input type="password" id="oldPassword" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">新密码</label>
+                <input type="password" id="newPassword" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">确认新密码</label>
+                <input type="password" id="confirmPassword" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div class="pt-4">
+                <button type="button" id="submitChangePasswordBtn" class="btn-primary text-white font-bold py-2 px-4 rounded w-full">修改密码</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 修改用户信息模态框 -->
+<div id="updateUserModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="card p-6 max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold">修改用户信息</h2>
+            <button type="button" id="closeUpdateUserBtn" class="text-gray-400 hover:text-gray-200">
+                ✕
+            </button>
+        </div>
+        <div class="space-y-6">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">用户名</label>
+                <input type="text" id="updateUsername" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">昵称</label>
+                <input type="text" id="updateNickname" class="w-full bg-input-bg border border-border-color rounded p-2 outline-none focus:border-blue-500">
+            </div>
+            <div class="pt-4">
+                <button type="button" id="submitUpdateUserBtn" class="btn-primary text-white font-bold py-2 px-4 rounded w-full">保存修改</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const form = document.getElementById('stockForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const marketCard = document.getElementById('marketDataCard');
+    const fullDataTable = document.getElementById('fullDataTable');
+    const reportCard = document.getElementById('reportCard');
+    const output = document.getElementById('streamOutput');
+    const stockNameInput = document.getElementById('stockName');
+    const searchBtn = document.getElementById('searchBtn');
+    const searchResults = document.getElementById('searchResults');
+    const symbolInput = document.querySelector('input[name="symbol"]');
+    const historyCard = document.getElementById('historyCard');
+    const historyList = document.getElementById('historyList');
+    const emptyHistory = document.getElementById('emptyHistory');
+    const newsCard = document.getElementById('newsCard');
+    const newsList = document.getElementById('newsList');
+    
+    // 模型选择相关元素
+    const modelSelect = document.getElementById('modelSelect');
+    const hiddenApiKeyInput = document.getElementById('hiddenApiKeyInput');
+    const hiddenModelInput = document.getElementById('hiddenModelInput');
+    
+    // 导出功能相关元素
+    const exportBtn = document.getElementById('exportBtn');
+    const exportModal = document.getElementById('exportModal');
+    const closeExportBtn = document.getElementById('closeExportBtn');
+    const startExportBtn = document.getElementById('startExportBtn');
+    
+    // 移动端历史按钮相关元素
+    const mobileHistoryBtn = document.getElementById('mobileHistoryBtn');
+    const mobileHistoryModal = document.getElementById('mobileHistoryModal');
+    const closeMobileHistoryBtn = document.getElementById('closeMobileHistoryBtn');
+    const mobileHistoryList = document.getElementById('mobileHistoryList');
+    const mobileEmptyHistory = document.getElementById('mobileEmptyHistory');
+    
+    // 进度条相关元素
+    const progressBarContainer = document.getElementById('progressBarContainer');
+    const progressBar = document.getElementById('progressBar');
+    const progressMessage = document.getElementById('progressMessage');
+    const progressPercentage = document.getElementById('progressPercentage');
+    
+    // 流式文本处理的状态管理
+    let textBuffer = '';
+    let isProcessing = false;
+    // 用于累积所有HTML内容的完整缓冲区
+    let fullContentBuffer = '';
+    
+    // 存储当前分析的数据
+    let currentAnalysisData = {};
+    
+    // 存储操作函数
+    function setStorage(name, value, days) {
+        try {
+            // 对于历史记录，使用localStorage，避免cookie大小限制
+            if (name === 'stockAnalysisHistory') {
+                localStorage.setItem(name, value);
+                return true;
+            }
+            // 对于其他数据（如API Key），继续使用cookie
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = name + '=' + (value || '') + ';expires=' + expires.toUTCString() + ';path=/';
+            return true;
+        } catch (e) {
+            console.error('存储数据失败:', e);
+            return false;
+        }
+    }
+    
+    function getStorage(name) {
+        try {
+            // 对于历史记录，使用localStorage
+            if (name === 'stockAnalysisHistory') {
+                return localStorage.getItem(name);
+            }
+            // 对于其他数据（如API Key），继续使用cookie
+            const nameEQ = name + '=';
+            const ca = document.cookie.split(';');
+            for(let i=0;i < ca.length;i++) {
+                let c = ca[i];
+                while (c.charAt(0)==' ') c = c.substring(1,c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+            }
+            return null;
+        } catch (e) {
+            console.error('获取数据失败:', e);
+            return null;
+        }
+    }
+    
+    // 更新进度条
+    function updateProgress(percentage, message) {
+        progressBar.style.width = `${percentage}%`;
+        progressPercentage.textContent = `${percentage}%`;
+        progressMessage.textContent = message;
+    }
+    
+    // 保存分析数据到历史记录（数据已在backend.php中保存到数据库）
+    function saveAnalysisToHistory(analysisData) {
+        console.log('分析数据已在backend.php中保存到数据库');
+        // 更新历史记录列表
+        renderHistoryList();
+    }
+    
+    // 从数据库加载历史分析记录
+    async function loadHistoryFromDatabase() {
+        try {
+            const response = await fetch('backend.php?action=history');
+            const data = await response.json();
+            return data || [];
+        } catch (error) {
+            console.error('加载历史记录失败:', error);
+            return [];
+        }
+    }
+    
+    // 按日期分组历史记录
+    function groupHistoryByDate(history) {
+        const groups = {};
+        history.forEach((item, index) => {
+            const date = new Date(item.created_at);
+            const dateKey = getLocalDateKey(date); // 使用本地日期
+            if (!groups[dateKey]) {
+                groups[dateKey] = [];
+            }
+            groups[dateKey].push({ ...item, originalIndex: index });
+        });
+        return groups;
+    }
+    
+    // 获取本地日期的YYYY-MM-DD格式
+    function getLocalDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
+    // 格式化日期显示
+    function formatDateDisplay(dateKey) {
+        const [year, month, day] = dateKey.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        
+        const todayKey = getLocalDateKey(today);
+        const yesterdayKey = getLocalDateKey(yesterday);
+        
+        if (dateKey === todayKey) {
+            return '今天';
+        } else if (dateKey === yesterdayKey) {
+            return '昨天';
+        } else {
+            return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+    }
+    
+    // 渲染历史记录列表（按日期分组，可折叠）
+    async function renderHistoryList() {
+        historyList.innerHTML = '<div class="text-blue-400 text-center py-8 animate-pulse">加载历史记录中...</div>';
+        mobileHistoryList.innerHTML = '<div class="text-blue-400 text-center py-8 animate-pulse">加载历史记录中...</div>';
+        
+        const history = await loadHistoryFromDatabase();
+        
+        // 桌面端和移动端共用渲染逻辑
+        const groups = groupHistoryByDate(history);
+        const dateKeys = Object.keys(groups).sort((a, b) => new Date(b) - new Date(a)); // 按日期倒序
+        
+        const renderContent = (isMobile = false) => {
+            if (dateKeys.length === 0) {
+                return '<div class="text-gray-400 text-center py-8">暂无历史分析记录</div>';
+            }
+            
+            let html = '';
+            let globalIndex = 0;
+            
+            dateKeys.forEach((dateKey) => {
+                const items = groups[dateKey];
+                const dateDisplay = formatDateDisplay(dateKey);
+                const groupId = isMobile ? `mobile-group-${dateKey}` : `group-${dateKey}`;
+                const toggleId = isMobile ? `mobile-toggle-${dateKey}` : `toggle-${dateKey}`;
+                const contentId = isMobile ? `mobile-content-${dateKey}` : `content-${dateKey}`;
+                
+                html += `
+                    <div class="mb-4" id="${groupId}">
+                        <button type="button" class="w-full flex justify-between items-center p-3 bg-hover-bg rounded hover:bg-card-bg transition-colors" id="${toggleId}" data-date="${dateKey}" data-mobile="${isMobile}">
+                            <div class="flex items-center gap-2">
+                                <span class="toggle-icon">▼</span>
+                                <span class="font-medium">${dateDisplay}</span>
+                                <span class="text-xs text-gray-400">(${items.length}条)</span>
+                            </div>
+                        </button>
+                        <div class="mt-2 space-y-2" id="${contentId}">
+                `;
+                
+                items.forEach((item) => {
+                    const marketData = item.market_data ? JSON.parse(item.market_data) : {};
+                    const stockName = marketData?.名称 || item.symbol;
+                    const time = new Date(item.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                    const dataIndex = isMobile ? `mobile-${globalIndex}` : globalIndex;
+                    const modelName = item.model === 'deepseek-reasoner' ? '思考模式' : '标准模式';
+                    
+                    html += `
+                        <div class="border border-border-color p-3 rounded hover:bg-hover-bg transition-colors">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-medium text-blue-400">${stockName}</h4>
+                                    <div class="text-xs text-gray-400 mt-1">${time}</div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button class="text-xs text-blue-400 hover:text-blue-300 ${isMobile ? 'mobile-view-history' : 'view-history'}" data-id="${item.id}">查看</button>
+                                    <button class="text-xs text-red-400 hover:text-red-300 ${isMobile ? 'mobile-delete-history' : 'delete-history'}" data-id="${item.id}">删除</button>
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-500 mt-2">
+                                价格: ${marketData?.价格 || 'N/A'} | 涨跌幅: ${marketData?.['涨跌幅%'] || 'N/A'} | 模型: ${modelName}
+                            </div>
+                        </div>
+                    `;
+                    globalIndex++;
+                });
+                
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+            
+            return html;
+        };
+        
+        // 渲染桌面端
+        if (dateKeys.length === 0) {
+            emptyHistory.classList.remove('hidden');
+            historyList.innerHTML = '';
+        } else {
+            emptyHistory.classList.add('hidden');
+            historyList.innerHTML = renderContent(false);
+        }
+        
+        // 渲染移动端
+        if (dateKeys.length === 0) {
+            mobileEmptyHistory.classList.remove('hidden');
+            mobileHistoryList.innerHTML = '';
+        } else {
+            mobileEmptyHistory.classList.add('hidden');
+            mobileHistoryList.innerHTML = renderContent(true);
+        }
+        
+        // 添加折叠/展开事件监听
+        document.querySelectorAll('[id^="toggle-"], [id^="mobile-toggle-"]').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const dateKey = this.dataset.date;
+                const isMobile = this.dataset.mobile === 'true';
+                const contentId = isMobile ? `mobile-content-${dateKey}` : `content-${dateKey}`;
+                const toggleIcon = this.querySelector('.toggle-icon');
+                const content = document.getElementById(contentId);
+                
+                if (content.style.display === 'none') {
+                    content.style.display = 'block';
+                    toggleIcon.textContent = '▼';
+                } else {
+                    content.style.display = 'none';
+                    toggleIcon.textContent = '▶';
+                }
+            });
+        });
+        
+        // 添加查看历史记录事件监听
+        document.querySelectorAll('.view-history, .mobile-view-history').forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const id = parseInt(this.dataset.id);
+                console.log('点击查看按钮，ID:', id, '历史数据:', history);
+                viewHistoryItemById(id, history);
+                if (this.classList.contains('mobile-view-history')) {
+                    mobileHistoryModal.classList.add('hidden');
+                }
+            });
+        });
+        
+        // 添加删除历史记录事件监听
+        document.querySelectorAll('.delete-history, .mobile-delete-history').forEach(btn => {
+            btn.addEventListener('click', async function() {
+                const id = parseInt(this.dataset.id);
+                if (confirm('确定要删除这条历史记录吗？')) {
+                    await deleteHistoryItemById(id);
+                    await renderHistoryList();
+                }
+            });
+        });
+    }
+    
+    // 技术指标说明
+    const indicatorDescriptions = {
+        'EMA5': 'EMA5（5日指数移动平均线）：最近5个交易日收盘价的加权平均值，侧重近期价格，比简单均线更敏感，用于判断短期趋势。',
+        'EMA10': 'EMA10（10日指数移动平均线）：最近10个交易日收盘价的加权平均值，用于判断中短期趋势。',
+        'EMA20': 'EMA20（20日指数移动平均线）：最近20个交易日收盘价的加权平均值，常用于判断中期趋势和作为布林带的中轨。',
+        'RSI14': 'RSI14（14日相对强弱指标）：取值0-100。RSI>70表示超买，可能回调；RSI<30表示超卖，可能反弹；50左右为中性。',
+        'K': 'KDJ-K值：KDJ指标的快速线，反映当前价格在近期高低点的位置，变化较快。',
+        'D': 'KDJ-D值：KDJ指标的慢速线，是K值的平滑，变化较慢，用于确认信号。',
+        'J': 'KDJ-J值：KDJ指标的超买超卖线，是3K-2D，最敏感，J>100超买，J<0超卖。',
+        '布林带': '布林带（布林线）：由三条线组成的通道指标，中轨通常为20日移动平均线，上下轨为中轨±2倍标准差。用于判断价格波动范围和支撑压力位，价格在通道内波动，突破上下轨可能预示趋势变化。',
+        '布林线': '布林带（布林线）：由三条线组成的通道指标，中轨通常为20日移动平均线，上下轨为中轨±2倍标准差。用于判断价格波动范围和支撑压力位，价格在通道内波动，突破上下轨可能预示趋势变化。',
+        '布林带上轨': '布林带上轨：布林带通道的上边界，通常为中轨+2倍标准差，价格触及上轨可能受压回落。',
+        '布林带中轨': '布林带中轨：通常为20日移动平均线，代表中期趋势方向。',
+        '布林带下轨': '布林带下轨：布林带通道的下边界，通常为中轨-2倍标准差，价格触及下轨可能获得支撑反弹。',
+        '价格位置': '价格位置：当前价格在布林带上下轨之间的百分比位置，0%在下轨，100%在上轨，50%在中轨。'
+    };
+    
+    // 格式化资金流向数据（单位：万元）
+    function formatMoneyFlow(value) {
+        if (value === null || value === undefined || value === '') return '-';
+        const num = parseFloat(value);
+        if (isNaN(num)) return value;
+        
+        // value是万元，先转换为元
+        const yuan = num * 10000;
+        const absYuan = Math.abs(yuan);
+        let formatted = '';
+        
+        if (absYuan >= 100000000) {
+            formatted = (yuan / 100000000).toFixed(2) + '亿';
+        } else if (absYuan >= 10000) {
+            formatted = (yuan / 10000).toFixed(2) + '万';
+        } else {
+            formatted = yuan.toFixed(0) + '元';
+        }
+        
+        return formatted;
+    }
+    
+    // 查看历史记录详情（通过ID）
+    function viewHistoryItemById(id, history) {
+        console.log('viewHistoryItemById被调用，id:', id, 'history:', history);
+        const item = history.find(h => parseInt(h.id) === id);
+        console.log('找到的item:', item);
+        
+        if (item) {
+            const marketData = item.market_data ? JSON.parse(item.market_data) : null;
+            const indexData = item.index_data ? JSON.parse(item.index_data) : null;
+            const newsData = item.news_data ? JSON.parse(item.news_data) : null;
+            const sectorData = item.sector_data ? JSON.parse(item.sector_data) : null;
+            const moneyFlowData = item.moneyflow_data ? JSON.parse(item.moneyflow_data) : null;
+            const technicalData = item.technical_data ? JSON.parse(item.technical_data) : null;
+            const reviewData = item.review_data ? JSON.parse(item.review_data) : null;
+            const aiContent = item.ai_content || '';
+            
+            console.log('解析后的数据:', { marketData, indexData, newsData, sectorData, moneyFlowData, technicalData, reviewData, aiContent });
+            
+            // 整合数据
+            let enhancedMarketData = marketData || {};
+            if (sectorData && Object.keys(sectorData).length > 0) {
+                enhancedMarketData['板块信息'] = sectorData;
+            }
+            if (moneyFlowData && Object.keys(moneyFlowData).length > 0) {
+                enhancedMarketData['资金流向'] = moneyFlowData;
+            }
+            if (technicalData && Object.keys(technicalData).length > 0) {
+                enhancedMarketData['技术指标'] = technicalData;
+            }
+            
+            // 显示市场数据
+            if (Object.keys(enhancedMarketData).length > 0) {
+                renderMarketTable(enhancedMarketData);
+                marketCard.classList.remove('hidden');
+                marketCard.classList.add('fade-in');
+            }
+            
+            // 显示新闻列表
+            if (newsData && newsData.length > 0) {
+                renderNewsList(newsData);
+                newsCard.classList.remove('hidden');
+                newsCard.classList.add('fade-in');
+            } else {
+                // 没有资讯数据时清空内容并隐藏资讯卡片
+                newsList.innerHTML = '';
+                newsCard.classList.add('hidden');
+            }
+            
+            // 显示分析报告
+            if (aiContent) {
+                reportCard.classList.remove('hidden');
+                output.innerHTML = '';
+                
+                const modelName = item.model === 'deepseek-reasoner' ? '思考模式' : '标准模式';
+                const modelLabel = `<div class="text-sm text-gray-400 mb-4 pb-2 border-b border-border-color">模型: ${modelName}</div>`;
+                
+                // 添加复盘数据显示
+                let reviewHtml = '';
+                if (reviewData && reviewData.length > 0) {
+                    reviewHtml = `<div class="mb-4 p-4 bg-hover-bg rounded-lg">
+                        <h4 class="text-md font-bold mb-2">复盘数据</h4>
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-border-color">
+                                    <th class="text-left py-2">类型</th>
+                                    <th class="text-left py-2">价格</th>
+                                    <th class="text-left py-2">时间</th>
+                                    <th class="text-left py-2">剩余数量</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${reviewData.map(record => {
+                                    const type = record.type === 'buy' ? '买入' : '卖出';
+                                    const remaining = record.remaining || '-';
+                                    return `<tr class="border-b border-border-color">
+                                        <td class="py-2">${type}</td>
+                                        <td class="py-2">${record.price}</td>
+                                        <td class="py-2">${record.time}</td>
+                                        <td class="py-2">${remaining}</td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+                }
+                
+                // 直接显示处理后的HTML代码，不需要再次处理
+                output.innerHTML = modelLabel + reviewHtml + processFullContent(aiContent);
+            }
+            
+            // 更新当前分析数据，用于导出
+            currentAnalysisData = {
+                symbol: item.symbol,
+                shares: item.shares,
+                cost: item.cost,
+                cash: item.cash,
+                marketData: enhancedMarketData,
+                indexData: indexData,
+                newsData: newsData,
+                reviewData: reviewData,
+                aiContent: aiContent
+            };
+        } else {
+            console.error('未找到对应的历史记录，id:', id);
+        }
+    }
+    
+    // 删除历史记录（通过ID）
+    async function deleteHistoryItemById(id) {
+        try {
+            const formData = new FormData();
+            formData.append('action', 'delete_history');
+            formData.append('id', id);
+            
+            const response = await fetch('backend.php', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                console.log('删除成功');
+            } else {
+                alert('删除失败: ' + (data.error || '未知错误'));
+            }
+        } catch (error) {
+            console.error('删除历史记录失败:', error);
+            alert('删除失败，请重试');
+        }
+    }
+    
+    // 渲染新闻列表
+    function renderNewsList(newsData) {
+        console.log('renderNewsList被调用，数据:', newsData);
+        
+        // 检查数据类型
+        if (!Array.isArray(newsData)) {
+            console.error('新闻数据类型错误:', newsData);
+            newsList.innerHTML = `<div class="text-red-500">新闻数据类型错误</div>`;
+            return;
+        }
+        
+        if (newsData.length === 0) {
+            newsList.innerHTML = `<div class="text-gray-400 text-center py-8">暂无新闻数据</div>`;
+            return;
+        }
+        
+        let html = '';
+        newsData.forEach(news => {
+            html += `
+                <div class="border-b border-border-color pb-4 mb-4 hover:bg-hover-bg p-3 rounded transition-colors">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-1">
+                            <a href="${news.url}" target="_blank" class="text-blue-400 hover:underline">${news.title}</a>
+                        </div>
+                        <div class="text-xs text-gray-400 ml-4">
+                            ${news.time}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        newsList.innerHTML = html;
+    }
+
+    // 保存模型选择到存储
+    function saveModelSelection(model) {
+        setStorage('deepseekModel', model, 365);
+    }
+    
+    // 从存储加载模型选择
+    function loadModelSelection() {
+        const savedModel = getStorage('deepseekModel');
+        return savedModel || 'deepseek-chat';
+    }
+    
+    // 存储系统设置（包括模型费用）
+    let systemSettings = {
+        analysis_cost_chat: 1,
+        analysis_cost_reasoner: 2
+    };
+    
+    // 加载系统名称和模型费用
+    async function loadSystemSettings() {
+        try {
+            const response = await fetch('backend.php?action=get_system_settings');
+            const data = await response.json();
+            
+            if (data.system_name) {
+                document.querySelector('h1').innerHTML = `📊 ${data.system_name}`;
+                document.title = `${data.system_name} - 基于DeepSeek的AI股票分析`;
+            }
+            
+            if (data.analysis_cost_chat !== undefined) {
+                systemSettings.analysis_cost_chat = parseInt(data.analysis_cost_chat);
+            }
+            if (data.analysis_cost_reasoner !== undefined) {
+                systemSettings.analysis_cost_reasoner = parseInt(data.analysis_cost_reasoner);
+            }
+            
+            updateModelCostDisplay();
+        } catch (error) {
+            console.error('加载系统设置失败:', error);
+        }
+    }
+    
+    // 更新模型费用显示
+    function updateModelCostDisplay() {
+        const modelSelect = document.getElementById('modelSelect');
+        const currentModel = modelSelect.value;
+        const cost = currentModel === 'deepseek-reasoner' ? systemSettings.analysis_cost_reasoner : systemSettings.analysis_cost_chat;
+        
+        const modelLabel = document.querySelector('#modelSelect').parentElement;
+        let costSpan = modelLabel.querySelector('.model-cost');
+        
+        if (!costSpan) {
+            costSpan = document.createElement('span');
+            costSpan.className = 'model-cost text-xs text-gray-400 ml-2';
+            modelLabel.appendChild(costSpan);
+        }
+        
+        costSpan.textContent = `(消耗 ${cost} 积分)`;
+    }
+    
+    // 模型选择变化事件
+    document.getElementById('modelSelect').addEventListener('change', updateModelCostDisplay);
+    
+    // 页面加载时从存储读取模型选择和历史记录
+    window.onload = async function() {
+        // 加载系统设置（包括名称和模型费用）
+        await loadSystemSettings();
+        
+        // 加载保存的主题
+        loadTheme();
+        
+        // 加载模型选择
+        const savedModel = loadModelSelection();
+        modelSelect.value = savedModel;
+        hiddenModelInput.value = savedModel;
+        
+        // 更新模型费用显示
+        updateModelCostDisplay();
+        
+        // 检查用户登录状态
+        await checkLoginStatus();
+        
+        // 刷新用户信息
+        await refreshUserInfo();
+    };
+    
+    // 检查用户登录状态
+    async function checkLoginStatus() {
+        try {
+            const response = await fetch('login.php?action=checklogin');
+            const data = await response.json();
+            
+            if (data.logged) {
+                updateUserInfo(data.user);
+                showFunctionality();
+                // 登录后渲染历史记录
+                await renderHistoryList();
+            } else {
+                showLoginBtn();
+                hideFunctionality();
+            }
+        } catch (error) {
+            console.error('检查登录状态失败:', error);
+            showLoginBtn();
+            hideFunctionality();
+        }
+    }
+    
+    // 更新用户信息
+    function updateUserInfo(user) {
+        document.getElementById('loginBtn').classList.add('hidden');
+        document.getElementById('userPoints').classList.remove('hidden');
+        document.getElementById('userDropdown').classList.remove('hidden');
+        document.getElementById('pointsValue').textContent = user.points;
+        document.getElementById('userName').textContent = user.nickname || '用户';
+    }
+    
+    // 刷新用户信息
+    async function refreshUserInfo() {
+        try {
+            const response = await fetch('backend.php?action=refresh_user');
+            const data = await response.json();
+            if (data.success && data.user) {
+                updateUserInfo(data.user);
+                console.log('用户信息已刷新:', data.user);
+            }
+        } catch (error) {
+            console.error('刷新用户信息失败:', error);
+        }
+    }
+    
+    // 显示登录按钮
+    function showLoginBtn() {
+        document.getElementById('loginBtn').classList.remove('hidden');
+        document.getElementById('userPoints').classList.add('hidden');
+        document.getElementById('userDropdown').classList.add('hidden');
+    }
+    
+    // 显示功能内容
+    function showFunctionality() {
+        document.getElementById('functionalityContainer').classList.remove('hidden');
+        document.getElementById('loginPrompt').classList.add('hidden');
+        document.getElementById('exportBtn').classList.remove('hidden');
+        document.querySelector('#modelSelect').parentElement.classList.remove('hidden');
+    }
+    
+    // 隐藏功能内容
+    function hideFunctionality() {
+        document.getElementById('functionalityContainer').classList.add('hidden');
+        document.getElementById('loginPrompt').classList.remove('hidden');
+        document.getElementById('exportBtn').classList.add('hidden');
+        document.querySelector('#modelSelect').parentElement.classList.add('hidden');
+        
+        // 隐藏所有卡片
+        document.getElementById('marketDataCard').classList.add('hidden');
+        document.getElementById('newsCard').classList.add('hidden');
+        document.getElementById('reportCard').classList.add('hidden');
+    }
+    
+    // 登录按钮点击事件
+    document.getElementById('loginBtn').addEventListener('click', function() {
+        document.getElementById('loginModal').classList.remove('hidden');
+    });
+    
+    // 登录提示按钮点击事件
+    document.getElementById('loginPromptBtn').addEventListener('click', function() {
+        document.getElementById('loginModal').classList.remove('hidden');
+    });
+    
+    // 关闭登录模态框
+    document.getElementById('closeLoginBtn').addEventListener('click', function() {
+        document.getElementById('loginModal').classList.add('hidden');
+    });
+    
+    // 点击登录模态框外部关闭
+    document.getElementById('loginModal').addEventListener('click', function(e) {
+        if (e.target === document.getElementById('loginModal')) {
+            document.getElementById('loginModal').classList.add('hidden');
+        }
+    });
+    
+    // 切换到注册页面
+    document.getElementById('switchToRegisterBtn').addEventListener('click', function() {
+        document.getElementById('loginModal').classList.add('hidden');
+        document.getElementById('registerModal').classList.remove('hidden');
+    });
+    
+    // 关闭注册模态框
+    document.getElementById('closeRegisterBtn').addEventListener('click', function() {
+        document.getElementById('registerModal').classList.add('hidden');
+    });
+    
+    // 点击注册模态框外部关闭
+    document.getElementById('registerModal').addEventListener('click', function(e) {
+        if (e.target === document.getElementById('registerModal')) {
+            document.getElementById('registerModal').classList.add('hidden');
+        }
+    });
+    
+    // 切换到登录页面
+    document.getElementById('switchToLoginBtn').addEventListener('click', function() {
+        document.getElementById('registerModal').classList.add('hidden');
+        document.getElementById('loginModal').classList.remove('hidden');
+    });
+    
+    // 登录表单回车事件
+    document.getElementById('loginUsername').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('submitLoginBtn').click();
+        }
+    });
+    
+    document.getElementById('loginPassword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('submitLoginBtn').click();
+        }
+    });
+    
+    // 提交登录表单
+    async function submitLogin() {
+        const username = document.getElementById('loginUsername').value.trim();
+        const password = document.getElementById('loginPassword').value.trim();
+        
+        if (!username || !password) {
+            alert('用户名和密码不能为空');
+            return;
+        }
+        
+        const loginBtn = document.getElementById('submitLoginBtn');
+        const originalText = loginBtn.innerText;
+        loginBtn.disabled = true;
+        loginBtn.innerText = '登录中...';
+        
+        try {
+            const response = await fetch('login.php?action=login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('登录成功');
+                document.getElementById('loginModal').classList.add('hidden');
+                checkLoginStatus();
+            } else {
+                alert(data.message || '登录失败');
+            }
+        } catch (error) {
+            console.error('登录失败:', error);
+            alert('登录失败，请重试');
+        } finally {
+            loginBtn.disabled = false;
+            loginBtn.innerText = originalText;
+        }
+    }
+    
+    document.getElementById('submitLoginBtn').addEventListener('click', submitLogin);
+    
+    // 注册表单回车事件
+    document.getElementById('registerUsername').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('submitRegisterBtn').click();
+        }
+    });
+    
+    document.getElementById('registerPassword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('submitRegisterBtn').click();
+        }
+    });
+    
+    document.getElementById('registerNickname').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('submitRegisterBtn').click();
+        }
+    });
+    
+    // 提交注册表单
+    async function submitRegister() {
+        const username = document.getElementById('registerUsername').value.trim();
+        const password = document.getElementById('registerPassword').value.trim();
+        const nickname = document.getElementById('registerNickname').value.trim();
+        
+        if (!username || !password) {
+            alert('用户名和密码不能为空');
+            return;
+        }
+        
+        const registerBtn = document.getElementById('submitRegisterBtn');
+        const originalText = registerBtn.innerText;
+        registerBtn.disabled = true;
+        registerBtn.innerText = '注册中...';
+        
+        try {
+            const response = await fetch('login.php?action=register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&nickname=${encodeURIComponent(nickname)}`
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('注册成功');
+                document.getElementById('registerModal').classList.add('hidden');
+                checkLoginStatus();
+            } else {
+                alert(data.message || '注册失败');
+            }
+        } catch (error) {
+            console.error('注册失败:', error);
+            alert('注册失败，请重试');
+        } finally {
+            registerBtn.disabled = false;
+            registerBtn.innerText = originalText;
+        }
+    }
+    
+    document.getElementById('submitRegisterBtn').addEventListener('click', submitRegister);
+    
+    // 修改密码按钮点击事件
+    document.getElementById('changePasswordBtn').addEventListener('click', function() {
+        document.getElementById('changePasswordModal').classList.remove('hidden');
+    });
+    
+    // 关闭修改密码模态框
+    document.getElementById('closeChangePasswordBtn').addEventListener('click', function() {
+        document.getElementById('changePasswordModal').classList.add('hidden');
+    });
+    
+    // 点击修改密码模态框外部关闭
+    document.getElementById('changePasswordModal').addEventListener('click', function(e) {
+        if (e.target === document.getElementById('changePasswordModal')) {
+            document.getElementById('changePasswordModal').classList.add('hidden');
+        }
+    });
+    
+    // 提交修改密码表单
+    document.getElementById('submitChangePasswordBtn').addEventListener('click', async function() {
+        const oldPassword = document.getElementById('oldPassword').value.trim();
+        const newPassword = document.getElementById('newPassword').value.trim();
+        const confirmPassword = document.getElementById('confirmPassword').value.trim();
+        
+        if (!oldPassword || !newPassword || !confirmPassword) {
+            alert('所有字段不能为空');
+            return;
+        }
+        
+        if (newPassword !== confirmPassword) {
+            alert('两次输入的密码不一致');
+            return;
+        }
+        
+        const changePasswordBtn = document.getElementById('submitChangePasswordBtn');
+        const originalText = changePasswordBtn.innerText;
+        changePasswordBtn.disabled = true;
+        changePasswordBtn.innerText = '修改中...';
+        
+        try {
+            const response = await fetch('login.php?action=changepassword', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `old_password=${encodeURIComponent(oldPassword)}&new_password=${encodeURIComponent(newPassword)}&confirm_password=${encodeURIComponent(confirmPassword)}`
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('密码修改成功');
+                document.getElementById('changePasswordModal').classList.add('hidden');
+            } else {
+                alert(data.message || '密码修改失败');
+            }
+        } catch (error) {
+            console.error('密码修改失败:', error);
+            alert('密码修改失败，请重试');
+        } finally {
+            changePasswordBtn.disabled = false;
+            changePasswordBtn.innerText = originalText;
+        }
+    });
+    
+    // 修改用户信息按钮点击事件
+    document.getElementById('updateUserBtn').addEventListener('click', async function() {
+        // 从服务器获取完整用户信息，确保获取到正确的用户名
+        try {
+            const response = await fetch('login.php?action=checklogin');
+            const data = await response.json();
+            
+            if (data.logged && data.user) {
+                const user = data.user;
+                document.getElementById('updateUsername').value = user.username || '';
+                document.getElementById('updateNickname').value = user.nickname || user.username || '';
+            }
+        } catch (error) {
+            console.error('获取用户信息失败:', error);
+            // 降级处理
+            const userName = document.getElementById('userName').textContent;
+            document.getElementById('updateUsername').value = userName;
+            document.getElementById('updateNickname').value = userName;
+        }
+        document.getElementById('updateUserModal').classList.remove('hidden');
+    });
+    
+    // 关闭修改用户信息模态框
+    document.getElementById('closeUpdateUserBtn').addEventListener('click', function() {
+        document.getElementById('updateUserModal').classList.add('hidden');
+    });
+    
+    // 点击修改用户信息模态框外部关闭
+    document.getElementById('updateUserModal').addEventListener('click', function(e) {
+        if (e.target === document.getElementById('updateUserModal')) {
+            document.getElementById('updateUserModal').classList.add('hidden');
+        }
+    });
+    
+    // 提交修改用户信息表单
+    document.getElementById('submitUpdateUserBtn').addEventListener('click', async function() {
+        const username = document.getElementById('updateUsername').value.trim();
+        const nickname = document.getElementById('updateNickname').value.trim();
+        
+        if (!username) {
+            alert('用户名不能为空');
+            return;
+        }
+        
+        if (!nickname) {
+            alert('昵称不能为空');
+            return;
+        }
+        
+        const updateUserBtn = document.getElementById('submitUpdateUserBtn');
+        const originalText = updateUserBtn.innerText;
+        updateUserBtn.disabled = true;
+        updateUserBtn.innerText = '更新中...';
+        
+        try {
+            const response = await fetch('login.php?action=updateuser', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: `username=${encodeURIComponent(username)}&nickname=${encodeURIComponent(nickname)}`
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('用户信息更新成功');
+                document.getElementById('updateUserModal').classList.add('hidden');
+                checkLoginStatus();
+            } else {
+                alert(data.message || '用户信息更新失败');
+            }
+        } catch (error) {
+            console.error('用户信息更新失败:', error);
+            alert('用户信息更新失败，请重试');
+        } finally {
+            updateUserBtn.disabled = false;
+            updateUserBtn.innerText = originalText;
+        }
+    });
+    
+    // 用户菜单按钮点击事件
+    document.getElementById('userMenuBtn').addEventListener('click', function() {
+        const userMenu = document.getElementById('userMenu');
+        userMenu.classList.toggle('hidden');
+    });
+    
+    // 点击页面其他地方关闭用户菜单
+    document.addEventListener('click', function(e) {
+        const userMenu = document.getElementById('userMenu');
+        const userMenuBtn = document.getElementById('userMenuBtn');
+        if (!userMenu.contains(e.target) && !userMenuBtn.contains(e.target)) {
+            userMenu.classList.add('hidden');
+        }
+    });
+    
+    // 充值按钮点击事件
+    document.getElementById('rechargeBtn').addEventListener('click', async function() {
+        await refreshUserInfo();
+        window.location.href = 'recharge.html';
+    });
+    
+    // 积分历史按钮点击事件
+    document.getElementById('pointsHistoryBtn').addEventListener('click', async function() {
+        await refreshUserInfo();
+        window.location.href = 'points_history.html';
+    });
+    
+    // 刷新积分按钮点击事件
+    document.getElementById('refreshPointsBtn').addEventListener('click', async function() {
+        await refreshUserInfo();
+        alert('积分已刷新！');
+    });
+    
+    
+    // 退出登录按钮点击事件
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+        window.location.href = 'login.php?action=logout';
+    });
+    
+    // 保存模型选择
+    modelSelect.addEventListener('change', function() {
+        const selectedModel = this.value;
+        saveModelSelection(selectedModel);
+        hiddenModelInput.value = selectedModel;
+    });
+    
+    // 显示移动端历史记录模态框
+    mobileHistoryBtn.addEventListener('click', function() {
+        // 重新渲染历史记录，确保数据最新
+        renderHistoryList();
+        mobileHistoryModal.classList.remove('hidden');
+    });
+    
+    // 隐藏移动端历史记录模态框
+    closeMobileHistoryBtn.addEventListener('click', function() {
+        mobileHistoryModal.classList.add('hidden');
+    });
+    
+    // 点击移动端历史记录模态框外部关闭
+    mobileHistoryModal.addEventListener('click', function(e) {
+        if (e.target === mobileHistoryModal) {
+            mobileHistoryModal.classList.add('hidden');
+        }
+    });
+    
+    // 显示导出模态框
+    exportBtn.addEventListener('click', function() {
+        // 检查是否有分析数据或历史数据显示
+        if (!currentAnalysisData.marketData && !currentAnalysisData.aiContent && 
+            marketCard.classList.contains('hidden') && reportCard.classList.contains('hidden')) {
+            alert('请先进行股票分析或查看历史数据，然后再导出数据');
+            return;
+        }
+        
+        exportModal.classList.remove('hidden');
+    });
+    
+    // 隐藏导出模态框
+    closeExportBtn.addEventListener('click', function() {
+        exportModal.classList.add('hidden');
+    });
+    
+    // 点击模态框外部关闭导出模态框
+    exportModal.addEventListener('click', function(e) {
+        if (e.target === exportModal) {
+            exportModal.classList.add('hidden');
+        }
+    });
+    
+    // 开始导出 - 修复 canvas 内容丢失的问题！
+    startExportBtn.addEventListener('click', async function() {
+        const exportFormat = document.querySelector('input[name="exportFormat"]:checked').value;
+        const exportContent = [];
+        document.querySelectorAll('input[name="exportContent"]:checked').forEach(checkbox => {
+            exportContent.push(checkbox.value);
+        });
+        
+        if (exportContent.length === 0) {
+            alert('请至少选择一项导出内容');
+            return;
+        }
+        
+        let stockName = '股票';
+        if (currentAnalysisData.marketData) {
+            stockName = currentAnalysisData.marketData['名称'] || stockName;
+        }
+        
+        startExportBtn.disabled = true;
+        startExportBtn.innerText = '导出中...';
+        
+        try {
+            // 第一步：先保存页面上所有原始 canvas 的图片数据
+            const canvasImages = {};
+            const originalCanvases = document.querySelectorAll('#marketDataCard canvas');
+            
+            for (let i = 0; i < originalCanvases.length; i++) {
+                const canvas = originalCanvases[i];
+                const id = canvas.id || `canvas-${i}`;
+                try {
+                    canvasImages[id] = canvas.toDataURL('image/png');
+                } catch (e) {
+                    console.error('无法保存 canvas 图片:', e);
+                }
+            }
+            
+            // 第二步：创建导出容器
+            const exportContainer = document.createElement('div');
+            exportContainer.className = 'bg-card-bg p-6 rounded-lg';
+            exportContainer.style.width = '800px';
+            exportContainer.style.maxWidth = '100%';
+            exportContainer.style.margin = '0 auto';
+            
+            // 标题
+            const title = document.createElement('h1');
+            title.className = 'text-2xl font-bold mb-6 text-center';
+            title.textContent = stockName + ' - 股票分析报告';
+            exportContainer.appendChild(title);
+            
+            const exportTime = document.createElement('p');
+            exportTime.className = 'text-sm text-gray-500 mb-6 text-center';
+            exportTime.textContent = '导出时间: ' + new Date().toLocaleString('zh-CN');
+            exportContainer.appendChild(exportTime);
+            
+            // 第三步：复制市场卡片
+            if (exportContent.includes('marketData') && !marketCard.classList.contains('hidden')) {
+                const marketClone = marketCard.cloneNode(true);
+                marketClone.classList.remove('hidden');
+                marketClone.style.marginBottom = '30px';
+                exportContainer.appendChild(marketClone);
+            }
+            
+            // 复制新闻卡片
+            if (exportContent.includes('news') && !newsCard.classList.contains('hidden')) {
+                const newsClone = newsCard.cloneNode(true);
+                newsClone.classList.remove('hidden');
+                newsClone.style.marginBottom = '30px';
+                exportContainer.appendChild(newsClone);
+            }
+            
+            // 复制分析报告
+            if (exportContent.includes('analysis') && !reportCard.classList.contains('hidden')) {
+                const reportClone = reportCard.cloneNode(true);
+                reportClone.classList.remove('hidden');
+                exportContainer.appendChild(reportClone);
+            }
+            
+            // 添加复盘数据
+            if (currentAnalysisData.reviewData && currentAnalysisData.reviewData.length > 0) {
+                const reviewSection = document.createElement('div');
+                reviewSection.className = 'mb-6 p-6 bg-card-bg border border-border-color rounded-lg';
+                
+                const reviewTitle = document.createElement('h3');
+                reviewTitle.className = 'text-lg font-bold mb-4';
+                reviewTitle.textContent = '复盘数据';
+                reviewSection.appendChild(reviewTitle);
+                
+                const reviewTable = document.createElement('table');
+                reviewTable.className = 'w-full text-sm border-collapse';
+                
+                const tableHeader = document.createElement('thead');
+            tableHeader.innerHTML = `
+                <tr class="border-b border-border-color">
+                    <th class="text-left py-2 px-4">类型</th>
+                    <th class="text-left py-2 px-4">价格</th>
+                    <th class="text-left py-2 px-4">时间</th>
+                    <th class="text-left py-2 px-4">剩余数量</th>
+                </tr>
+            `;
+            reviewTable.appendChild(tableHeader);
+            
+            const tableBody = document.createElement('tbody');
+            currentAnalysisData.reviewData.forEach(record => {
+                const type = record.type === 'buy' ? '买入' : '卖出';
+                const remaining = record.remaining || '-';
+                const row = document.createElement('tr');
+                row.className = 'border-b border-border-color';
+                row.innerHTML = `
+                    <td class="py-2 px-4">${type}</td>
+                    <td class="py-2 px-4">${record.price}</td>
+                    <td class="py-2 px-4">${record.time}</td>
+                    <td class="py-2 px-4">${remaining}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+                reviewTable.appendChild(tableBody);
+                
+                reviewSection.appendChild(reviewTable);
+                exportContainer.appendChild(reviewSection);
+            }
+            
+            document.body.appendChild(exportContainer);
+            
+            // 第四步：把所有 canvas 替换成 img 标签，并使用之前保存的图片数据
+            const canvases = exportContainer.querySelectorAll('canvas');
+            for (let i = 0; i < canvases.length; i++) {
+                const canvas = canvases[i];
+                const id = canvas.id || `canvas-${i}`;
+                const img = document.createElement('img');
+                
+                // 使用之前保存的图片数据
+                if (canvasImages[id]) {
+                    img.src = canvasImages[id];
+                } else {
+                    // 如果没有保存到，尝试直接从当前 canvas 获取（虽然 clone 后可能是空的）
+                    try {
+                        img.src = canvas.toDataURL('image/png');
+                    } catch (e) {
+                        console.error('无法获取 canvas 数据:', e);
+                    }
+                }
+                
+                img.style.maxWidth = '100%';
+                img.style.display = 'block';
+                img.className = canvas.className || '';
+                if (canvas.style.height) img.style.height = canvas.style.height;
+                if (canvas.style.maxHeight) img.style.maxHeight = canvas.style.maxHeight;
+                canvas.parentNode.replaceChild(img, canvas);
+            }
+            
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            if (exportFormat === 'pdf') {
+                await exportToPdf(exportContainer, stockName);
+            } else {
+                await exportToImage(exportContainer, stockName);
+            }
+            
+            document.body.removeChild(exportContainer);
+            exportModal.classList.add('hidden');
+            alert('导出成功');
+        } catch (error) {
+            console.error('导出失败:', error);
+            alert('导出失败: ' + error.message);
+        } finally {
+            startExportBtn.disabled = false;
+            startExportBtn.innerText = '开始导出';
+        }
+    });
+    
+    // 检测是否是微信浏览器
+    function isWeChat() {
+        const ua = navigator.userAgent.toLowerCase();
+        return ua.indexOf('micromessenger') !== -1;
+    }
+    
+    // 导出为PDF
+    async function exportToPdf(element, stockName) {
+        const { jsPDF } = window.jspdf;
+        let safeStockName = '股票';
+        if (stockName && typeof stockName === 'string') {
+            safeStockName = stockName.replace(/[\\/:*?"<>|]/g, '_');
+        }
+        
+        // 生成图片 - 使用更好的配置确保图表捕获
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            useCORS: true,
+            logging: false,
+            scrollY: 0,
+            scrollX: 0,
+            windowWidth: element.scrollWidth,
+            windowHeight: element.scrollHeight,
+            backgroundColor: '#ffffff',
+            allowTaint: true,
+            imageTimeout: 15000
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        
+        if (isWeChat()) {
+            showWeChatDownloadHelp(imgData, safeStockName + ' - 股票分析报告.png');
+            return;
+        }
+        
+        const imgWidth = 210;
+        const pageHeight = 295;
+        const imgHeight = canvas.height * imgWidth / canvas.width;
+        
+        // 创建PDF文档
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        
+        // 简单可靠的分页方式：逐页显示，每页只显示对应部分
+        let position = 0;
+        let heightLeft = imgHeight;
+        
+        // 第一页
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+        
+        // 后续页面
+        while (heightLeft > 0) {
+            position = position - pageHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+        
+        // 保存PDF
+        pdf.save(safeStockName + ' - 股票分析报告.pdf');
+    }
+    
+    // 导出为图片
+    async function exportToImage(element, stockName) {
+        let safeStockName = '股票';
+        if (stockName && typeof stockName === 'string') {
+            safeStockName = stockName.replace(/[\\/:*?"<>|]/g, '_');
+        }
+        
+        // 生成图片
+        const canvas = await html2canvas(element, {
+            scale: 2,
+            useCORS: true,
+            logging: false
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        
+        if (isWeChat()) {
+            showWeChatDownloadHelp(imgData, safeStockName + ' - 股票分析报告.png');
+            return;
+        }
+        
+        // 创建下载链接
+        const link = document.createElement('a');
+        link.download = safeStockName + ' - 股票分析报告.png';
+        link.href = imgData;
+        link.click();
+    }
+    
+    // 显示微信浏览器下载帮助
+    function showWeChatDownloadHelp(imgData, fileName) {
+        // 创建一个模态框显示图片和提示
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 99999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        `;
+        
+        modal.innerHTML = `
+            <div style="max-width: 100%; max-height: 70vh; overflow: auto; margin-bottom: 20px;">
+                <img src="${imgData}" style="max-width: 100%; display: block;">
+            </div>
+            <div style="background: white; padding: 20px; border-radius: 8px; max-width: 400px; width: 100%; text-align: center;">
+                <h3 style="margin: 0 0 15px 0; color: #333;">微信浏览器提示</h3>
+                <p style="color: #666; margin-bottom: 15px; line-height: 1.6;">
+                    微信浏览器不支持直接下载，请长按上方图片<br>
+                    选择"保存到手机"即可保存图片
+                </p>
+                <p style="color: #999; font-size: 12px; margin-bottom: 15px;">
+                    如果需要PDF格式，请在浏览器中打开
+                </p>
+                <button id="closeWechatHelp" style="background: #238636; color: white; border: none; padding: 10px 30px; border-radius: 6px; font-size: 16px; cursor: pointer;">
+                    我知道了
+                </button>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        document.getElementById('closeWechatHelp').onclick = function() {
+            document.body.removeChild(modal);
+        };
+    }
+    
+
+
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        
+        // 重置 UI
+        submitBtn.disabled = true;
+        submitBtn.innerText = "数据获取中...";
+        marketCard.classList.add('hidden');
+        newsCard.classList.add('hidden');
+        reportCard.classList.remove('hidden');
+        output.innerHTML = `<div class="text-blue-400 animate-pulse">正在解析腾讯行情接口数据并同步至 DeepSeek AI...</div>`;
+        
+        // 清空旧数据
+        newsList.innerHTML = '';
+        fullDataTable.innerHTML = '';
+        
+        // 显示进度条
+        progressBarContainer.classList.remove('hidden');
+        updateProgress(0, '准备开始...');
+
+        const formData = new FormData(form);
+        
+        // 收集表单数据
+        const symbol = formData.get('symbol');
+        const shares = formData.get('shares');
+        const cost = formData.get('cost');
+        const cash = formData.get('cash');
+
+        // 收集复盘数据
+        const reviewData = [];
+        const reviewRecords = document.querySelectorAll('.review-record');
+        reviewRecords.forEach((record, index) => {
+            const type = record.querySelector(`select[name^="review_type_"]`).value;
+            const price = record.querySelector(`input[name^="review_price_"]`).value;
+            const time = record.querySelector(`input[name^="review_time_"]`).value;
+            const remaining = record.querySelector(`input[name^="review_remaining_"]`).value;
+            
+            if (type && price && time) {
+                reviewData.push({
+                    type: type,
+                    price: price,
+                    time: time,
+                    remaining: remaining
+                });
+            }
+        });
+
+        // 重置当前分析数据
+        currentAnalysisData = {
+            symbol: symbol,
+            shares: shares,
+            cost: cost,
+            cash: cash,
+            reviewData: reviewData.length > 0 ? reviewData : null,
+            timestamp: new Date().toLocaleString('zh-CN'),
+            marketData: null,
+            aiContent: ''
+        };
+
+        // 将复盘数据添加到formData中
+        if (reviewData.length > 0) {
+            formData.append('reviewData', JSON.stringify(reviewData));
+        }
+
+        try {
+            const response = await fetch('backend.php', { method: 'POST', body: formData });
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            output.innerHTML = "";
+            fullContentBuffer = ''; // 重置完整内容缓冲区
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (let line of lines) {
+                    if (line.startsWith('PROGRESS:')) {
+                        console.log('收到PROGRESS行:', line);
+                        try {
+                            const progressData = JSON.parse(line.replace('PROGRESS:', ''));
+                            console.log('解析后的PROGRESS数据:', progressData);
+                            
+                            // 更新进度条
+                            updateProgress(progressData.percentage, progressData.message);
+                            
+                            // 如果需要隐藏进度条
+                            if (progressData.hide) {
+                                setTimeout(() => {
+                                    progressBarContainer.classList.add('hidden');
+                                }, 1000);
+                                // 分析完成，自动刷新用户积分
+                                refreshUserInfo();
+                            }
+                        } catch (error) {
+                            console.error('解析PROGRESS数据失败:', error);
+                            console.error('原始PROGRESS行:', line);
+                        }
+                    } else if (line.startsWith('DATA:')) {
+                        console.log('收到DATA行:', line);
+                        try {
+                            const data = JSON.parse(line.replace('DATA:', ''));
+                            console.log('解析后的DATA数据:', data);
+                            
+                            // 检查数据结构
+                            if (data.stockData && typeof data.stockData === 'object') {
+                                console.log('使用新的数据结构');
+                                const stockData = data.stockData;
+                                const indexData = data.indexData;
+                                
+                                // 渲染股票数据
+                                renderMarketTable(stockData);
+                                marketCard.classList.remove('hidden');
+                                marketCard.classList.add('fade-in');
+                                
+                                // 保存市场数据
+                                currentAnalysisData.marketData = stockData;
+                                currentAnalysisData.stockName = stockData.名称;
+                                
+                                // 保存指数数据
+                                if (indexData) {
+                                    currentAnalysisData.indexData = indexData;
+                                }
+                                
+                                // 保存新闻数据
+                                if (data.newsData && data.newsData.length > 0) {
+                                    currentAnalysisData.newsData = data.newsData;
+                                    // 渲染新闻列表
+                                    renderNewsList(data.newsData);
+                                    newsCard.classList.remove('hidden');
+                                    newsCard.classList.add('fade-in');
+                                }
+                            } else {
+                                console.log('使用旧的数据结构');
+                                // 渲染股票数据
+                                renderMarketTable(data);
+                                marketCard.classList.remove('hidden');
+                                marketCard.classList.add('fade-in');
+                                
+                                // 保存市场数据
+                                currentAnalysisData.marketData = data;
+                                currentAnalysisData.stockName = data.名称;
+                            }
+                        } catch (error) {
+                            console.error('解析DATA数据失败:', error);
+                            console.error('原始DATA行:', line);
+                            fullDataTable.innerHTML = `<div class="text-red-500">解析数据失败: ${error.message}</div>`;
+                        }
+                    } else if (line.startsWith('TEXT:')) {
+                        const text = line.replace('TEXT:', '');
+                        if (text) {
+                            // 将数据添加到完整内容缓冲区
+                            fullContentBuffer += text;
+                            
+                            // 定期更新显示
+                            updateStreamDisplay();
+                            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+                        }
+                    }
+                }
+            }
+            
+
+            
+            // 从output.innerHTML中获取完整的HTML代码
+            currentAnalysisData.aiContent = output.innerHTML;
+            
+            // 保存分析数据到历史记录
+            console.log('准备保存分析数据到历史记录');
+            console.log('currentAnalysisData:', currentAnalysisData);
+            console.log('marketData存在:', !!currentAnalysisData.marketData);
+            console.log('aiContent存在:', !!currentAnalysisData.aiContent);
+            
+            if (currentAnalysisData.marketData || currentAnalysisData.aiContent) {
+                console.log('调用saveAnalysisToHistory函数');
+                saveAnalysisToHistory(currentAnalysisData);
+            } else {
+                console.log('marketData和aiContent都不存在，不保存到历史记录');
+            }
+        } catch (err) {
+            output.innerHTML = `<span class="text-red-500">系统错误: ${err.message}</span>`;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "开始实时数据分析";
+        }
+    };
+
+
+
+    function updateStreamDisplay() {
+        // 获取当前选择的模型
+        const currentModel = document.getElementById('modelSelect').value;
+        const modelName = currentModel === 'deepseek-reasoner' ? '思考模式' : '标准模式';
+        const modelLabel = `<div class="text-sm text-gray-400 mb-4 pb-2 border-b border-border-color">模型: ${modelName}</div>`;
+        
+        // 使用完整缓冲区的内容来更新显示，并在开头添加模型标注
+        output.innerHTML = modelLabel + processFullContent(fullContentBuffer);
+    }
+
+    function processFullContent(fullText) {
+        // 处理完整的HTML内容，确保正确渲染
+        let cleanHtml = fullText;
+        
+        // 在分析报告开头添加免责声明
+        const disclaimer = '<div style="background: var(--hover-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin-bottom: 20px; font-size: 12px; color: var(--gray-400);"><div style="color: #f59e0b; font-weight: bold; margin-bottom: 8px;">⚠️ 重要提示</div><div>本分析报告仅供学习、研究和参考使用，不构成任何投资建议或交易指导。股票、基金等金融产品投资存在风险，请谨慎决策，自行承担投资风险。</div></div>';
+        
+        // 1. 首先处理转义的HTML标签，这是最关键的一步
+        cleanHtml = cleanHtml.replace(/&lt;/g, '<');
+        cleanHtml = cleanHtml.replace(/&gt;/g, '>');
+        cleanHtml = cleanHtml.replace(/&amp;/g, '&');
+        // 处理可能的其他转义字符
+        cleanHtml = cleanHtml.replace(/&quot;/g, '"');
+        cleanHtml = cleanHtml.replace(/&#39;/g, "'");
+        
+        // 2. 移除完整的HTML结构标签
+        cleanHtml = cleanHtml.replace(/<!DOCTYPE html>/gi, '');
+        cleanHtml = cleanHtml.replace(/<html[^>]*>/gi, '');
+        cleanHtml = cleanHtml.replace(/<head[^>]*>.*?<\/head>/gis, '');
+        cleanHtml = cleanHtml.replace(/<body[^>]*>/gi, '');
+        cleanHtml = cleanHtml.replace(/<\/body>/gi, '');
+        cleanHtml = cleanHtml.replace(/<\/html>/gi, '');
+        
+        // 3. 移除可能影响布局的脚本和样式
+        cleanHtml = cleanHtml.replace(/<script[^>]*>.*?<\/script>/gis, '');
+        cleanHtml = cleanHtml.replace(/<style[^>]*>.*?<\/style>/gis, '');
+        
+        // 4. 为所有标签添加内联样式，确保在深色/浅色主题下正确显示
+        cleanHtml = cleanHtml.replace(/<h2([^>]*)>/gi, '<h2$1 style="color: var(--blue-400); margin: 1.5rem 0 1rem 0;">');
+        cleanHtml = cleanHtml.replace(/<h3([^>]*)>/gi, '<h3$1 style="color: var(--blue-400); margin: 1rem 0 0.5rem 0;">');
+        cleanHtml = cleanHtml.replace(/<p([^>]*)>/gi, '<p$1 style="margin: 0.5rem 0; line-height: 1.6;">');
+        cleanHtml = cleanHtml.replace(/<table([^>]*)>/gi, '<table$1 style="width: 100%; border-collapse: collapse; margin: 1rem 0;">');
+        cleanHtml = cleanHtml.replace(/<th([^>]*)>/gi, '<th$1 style="border: 1px solid var(--border-color); padding: 8px; text-align: left; background: var(--hover-bg); color: var(--gray-400);">');
+        cleanHtml = cleanHtml.replace(/<td([^>]*)>/gi, '<td$1 style="border: 1px solid var(--border-color); padding: 8px; text-align: left;">');
+        cleanHtml = cleanHtml.replace(/<strong([^>]*)>/gi, '<strong$1 style="color: var(--blue-400);">');
+        
+        // 5. 清理多余的空白和特殊字符
+        cleanHtml = cleanHtml.trim();
+        
+        // 返回处理后的HTML，在开头添加免责声明
+        return disclaimer + cleanHtml;
+    }
+
+    function processTextOutput(text) {
+        // 这个函数保留用于兼容性，现在主要使用processFullContent
+        return processFullContent(text);
+    }
+
+    function renderMarketTable(data) {
+        console.log('renderMarketTable被调用，数据:', data);
+        // 保存当前显示的数据
+        currentDisplayedMarketData = data;
+        
+        // 检查数据类型
+        if (typeof data !== 'object' || data === null) {
+            console.error('数据类型错误:', data);
+            fullDataTable.innerHTML = `<div class="text-red-500">数据类型错误</div>`;
+            return;
+        }
+        
+        // 检查是否包含stockData和indexData（可能是直接传递了整个数据对象）
+        let stockData = data;
+        let sectorData = null;
+        let moneyFlowData = null;
+        let technicalIndicators = null;
+        
+        if (data.stockData && typeof data.stockData === 'object') {
+            console.log('检测到包含stockData的对象');
+            stockData = data.stockData;
+        }
+        
+        // 提取新增的数据
+        if (stockData['板块信息']) {
+            sectorData = stockData['板块信息'];
+        }
+        if (stockData['资金流向']) {
+            moneyFlowData = stockData['资金流向'];
+        }
+        if (stockData['技术指标']) {
+            technicalIndicators = stockData['技术指标'];
+        }
+        
+        let html = '';
+        
+        // 1. 基础行情数据
+        html += `<div class="mb-6">
+            <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 基础行情</h4>
+            <div class="market-grid">`;
+        
+        // 过滤掉板块信息、资金流向、技术指标这些对象类型的键
+        const basicKeys = Object.keys(stockData).filter(k => 
+            typeof stockData[k] !== null && typeof stockData[k] !== undefined && 
+            !['板块信息', '资金流向', '技术指标'].includes(k)
+        );
+        
+        basicKeys.forEach(k => {
+            const val = stockData[k];
+            if (typeof val === 'object') return; // 跳过对象类型
+            let colorClass = '';
+            if (k.includes('涨跌幅') || k.includes('涨跌') || k.includes('涨幅')) {
+                const numVal = parseFloat(val);
+                if (numVal > 0) {
+                    colorClass = 'positive';
+                } else if (numVal < 0) {
+                    colorClass = 'negative';
+                }
+            }
+            
+            html += `
+                <div class="market-item">
+                    <div class="market-label">${k}</div>
+                    <div class="market-value ${colorClass}">${val}</div>
+                </div>
+            `;
+        });
+        
+        html += `</div></div>`;
+        
+        // 2. 板块信息
+        if (sectorData && Object.keys(sectorData).length > 0) {
+            html += `<div class="mb-6">
+                <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">🏭 所属板块</h4>
+                <div class="market-grid">`;
+            Object.keys(sectorData).forEach(k => {
+                const val = sectorData[k];
+                html += `
+                    <div class="market-item">
+                        <div class="market-label">${k}</div>
+                        <div class="market-value">${val || '-'}</div>
+                    </div>
+                `;
+            });
+            html += `</div></div>`;
+        }
+        
+        // 3. 资金流向
+        if (moneyFlowData && Object.keys(moneyFlowData).length > 0) {
+            html += `<div class="mb-6">
+                <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">💰 资金流向</h4>
+                
+                <!-- 资金流向表格 -->
+                <div class="card p-4 mb-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">资金流向详细数据</h5>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-border-color">
+                                    <th class="text-left p-2 text-gray-400">类型</th>
+                                    <th class="text-right p-2 text-gray-400">净流入(万元)</th>
+                                    <th class="text-right p-2 text-gray-400">流入(万元)</th>
+                                    <th class="text-right p-2 text-gray-400">流出(万元)</th>
+                                    <th class="text-right p-2 text-gray-400">净占比</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-border-color hover:bg-hover-bg">
+                                    <td class="p-2 font-medium">超大单</td>
+                                    <td class="p-2 text-right">
+                                        <span class="${parseFloat(moneyFlowData['超大单净流入'] || 0) > 0 ? 'text-red-500' : 'text-green-500'}">
+                                            ${moneyFlowData['超大单净流入'] || '-'}
+                                        </span>
+                                    </td>
+                                    <td class="p-2 text-right text-red-500">${moneyFlowData['超大单流入'] || '-'}</td>
+                                    <td class="p-2 text-right text-green-500">${moneyFlowData['超大单流出'] || '-'}</td>
+                                    <td class="p-2 text-right">${moneyFlowData['超大单净占比'] || '-'}</td>
+                                </tr>
+                                <tr class="border-b border-border-color hover:bg-hover-bg">
+                                    <td class="p-2 font-medium">大单</td>
+                                    <td class="p-2 text-right">
+                                        <span class="${parseFloat(moneyFlowData['大单净流入'] || 0) > 0 ? 'text-red-500' : 'text-green-500'}">
+                                            ${moneyFlowData['大单净流入'] || '-'}
+                                        </span>
+                                    </td>
+                                    <td class="p-2 text-right text-red-500">${moneyFlowData['大单流入'] || '-'}</td>
+                                    <td class="p-2 text-right text-green-500">${moneyFlowData['大单流出'] || '-'}</td>
+                                    <td class="p-2 text-right">${moneyFlowData['大单净占比'] || '-'}</td>
+                                </tr>
+                                <tr class="border-b border-border-color hover:bg-hover-bg">
+                                    <td class="p-2 font-medium">中单</td>
+                                    <td class="p-2 text-right">
+                                        <span class="${parseFloat(moneyFlowData['中单净流入'] || 0) > 0 ? 'text-red-500' : 'text-green-500'}">
+                                            ${moneyFlowData['中单净流入'] || '-'}
+                                        </span>
+                                    </td>
+                                    <td class="p-2 text-right text-red-500">${moneyFlowData['中单流入'] || '-'}</td>
+                                    <td class="p-2 text-right text-green-500">${moneyFlowData['中单流出'] || '-'}</td>
+                                    <td class="p-2 text-right">${moneyFlowData['中单净占比'] || '-'}</td>
+                                </tr>
+                                <tr class="border-b border-border-color hover:bg-hover-bg">
+                                    <td class="p-2 font-medium">小单</td>
+                                    <td class="p-2 text-right">
+                                        <span class="${parseFloat(moneyFlowData['小单净流入'] || 0) > 0 ? 'text-red-500' : 'text-green-500'}">
+                                            ${moneyFlowData['小单净流入'] || '-'}
+                                        </span>
+                                    </td>
+                                    <td class="p-2 text-right text-red-500">${moneyFlowData['小单流入'] || '-'}</td>
+                                    <td class="p-2 text-right text-green-500">${moneyFlowData['小单流出'] || '-'}</td>
+                                    <td class="p-2 text-right">${moneyFlowData['小单净占比'] || '-'}</td>
+                                </tr>
+                                <tr class="bg-hover-bg font-bold">
+                                    <td class="p-2">主力合计</td>
+                                    <td class="p-2 text-right">
+                                        <span class="${parseFloat(moneyFlowData['主力净流入'] || 0) > 0 ? 'text-red-500' : 'text-green-500'}">
+                                            ${moneyFlowData['主力净流入'] || '-'}
+                                        </span>
+                                    </td>
+                                    <td class="p-2 text-right">-</td>
+                                    <td class="p-2 text-right">-</td>
+                                    <td class="p-2 text-right">${moneyFlowData['主力净占比'] || '-'}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 资金流向图表 -->
+                <div class="space-y-4">
+                    <div class="card p-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">资金净流入(万元)</h5>
+                        <canvas id="moneyFlowNetChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="card p-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">资金流入流出对比(万元)</h5>
+                        <canvas id="moneyFlowCompareChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div></div>`;
+        }
+        
+        // 4. 技术指标
+        if (technicalIndicators && Object.keys(technicalIndicators).length > 0) {
+            html += `<div class="mb-6">
+                <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📈 技术指标</h4>
+                
+                <!-- 技术指标表格 -->
+                <div class="card p-4 mb-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">技术指标详细数据</h5>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-border-color">
+                                    <th class="text-left p-2 text-gray-400">指标名称</th>
+                                    <th class="text-right p-2 text-gray-400">数值</th>
+                                    <th class="text-left p-2 text-gray-400">状态</th>
+                                    <th class="text-left p-2 text-gray-400">说明</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+            
+            // 先添加布林带的整体介绍
+            const hasBollinger = Object.keys(technicalIndicators).some(k => k.includes('布林带'));
+            if (hasBollinger) {
+                html += `
+                    <tr class="border-b border-border-color bg-blue-50 dark:bg-blue-900/20">
+                        <td class="p-2 font-medium text-blue-500">布林带(布林线)</td>
+                        <td class="p-2 text-right">-</td>
+                        <td class="p-2">-</td>
+                        <td class="p-2 text-xs text-gray-400">${indicatorDescriptions['布林带']}</td>
+                    </tr>
+                `;
+            }
+            
+            Object.keys(technicalIndicators).forEach(k => {
+                const val = technicalIndicators[k];
+                let displayVal = val !== null && val !== undefined ? val : '-';
+                let status = '-';
+                let statusClass = '';
+                let description = indicatorDescriptions[k] || '-';
+                
+                // RSI超买超卖提示
+                if (k === 'RSI14' && !isNaN(parseFloat(val))) {
+                    const rsiVal = parseFloat(val);
+                    if (rsiVal > 70) {
+                        status = '超买';
+                        statusClass = 'text-red-500';
+                    } else if (rsiVal < 30) {
+                        status = '超卖';
+                        statusClass = 'text-green-500';
+                    } else {
+                        status = '中性';
+                        statusClass = 'text-gray-400';
+                    }
+                }
+                
+                // KDJ金叉死叉提示（简化判断）
+                if (k === 'K' || k === 'D' || k === 'J') {
+                    status = '-';
+                }
+                
+                // 布林带价格位置提示
+                if (k === '价格位置' && !isNaN(parseFloat(val))) {
+                    const posVal = parseFloat(val);
+                    if (posVal > 80) {
+                        status = '接近上轨';
+                        statusClass = 'text-red-500';
+                    } else if (posVal < 20) {
+                        status = '接近下轨';
+                        statusClass = 'text-green-500';
+                    } else {
+                        status = '中轨附近';
+                        statusClass = 'text-gray-400';
+                    }
+                }
+                
+                html += `
+                    <tr class="border-b border-border-color hover:bg-hover-bg">
+                        <td class="p-2 font-medium">${k}</td>
+                        <td class="p-2 text-right ${statusClass}">${displayVal}</td>
+                        <td class="p-2 ${statusClass}">${status}</td>
+                        <td class="p-2 text-xs text-gray-400">${description}</td>
+                    </tr>
+                `;
+            });
+            
+            html += `</tbody></table></div></div>
+                
+                <!-- 技术指标图表 -->
+                <div class="space-y-4">
+                    <div class="card p-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">均线系统</h5>
+                        <canvas id="emaChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="card p-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">RSI & KDJ</h5>
+                        <canvas id="rsiKdjChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="card p-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">布林带</h5>
+                        <canvas id="bollingerChart" style="max-height: 300px;"></canvas>
+                    </div>
+                </div></div>`;
+        }
+        
+        console.log('生成的HTML:', html);
+        fullDataTable.innerHTML = html;
+        
+        // 绘制资金流向图表
+        if (moneyFlowData && Object.keys(moneyFlowData).length > 0) {
+            const textColor = document.body.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#1f2328';
+            const gridColor = document.body.getAttribute('data-theme') === 'dark' ? '#30363d' : '#e5e7eb';
+            
+            // 图表1：资金净流入（横向柱状图）
+            const netCanvas = document.getElementById('moneyFlowNetChart');
+            if (netCanvas) {
+                const ctxNet = netCanvas.getContext('2d');
+                
+                const labels = ['超大单', '大单', '中单', '小单', '主力'];
+                const netInflowData = [];
+                const colors = [];
+                
+                labels.forEach(label => {
+                    const key = label + '净流入';
+                    const val = moneyFlowData[key];
+                    const numVal = parseFloat(val) || 0;
+                    netInflowData.push(numVal);
+                    
+                    // 红色表示净流入(正)，绿色表示净流出(负)
+                    if (numVal > 0) {
+                        colors.push('rgba(220, 38, 38, 0.9)');
+                    } else if (numVal < 0) {
+                        colors.push('rgba(34, 197, 94, 0.9)');
+                    } else {
+                        colors.push('rgba(156, 163, 175, 0.8)');
+                    }
+                });
+                
+                // 销毁旧图表
+                if (window.moneyFlowNetChartInstance) {
+                    window.moneyFlowNetChartInstance.destroy();
+                }
+                
+                window.moneyFlowNetChartInstance = new Chart(ctxNet, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: '净流入(万元)',
+                            data: netInflowData,
+                            backgroundColor: colors,
+                            borderColor: colors.map(c => c.replace('0.9', '1').replace('0.8', '1')),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return '净流入: ' + formatMoneyFlow(context.parsed.x);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: textColor,
+                                    callback: function(value) {
+                                        return value >= 10000 ? (value / 10000).toFixed(2) + '亿' : value + '万';
+                                    }
+                                },
+                                grid: { color: gridColor }
+                            },
+                            y: {
+                                ticks: { color: textColor },
+                                grid: { display: false }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 图表2：资金流入流出对比
+            const compareCanvas = document.getElementById('moneyFlowCompareChart');
+            if (compareCanvas) {
+                const ctxCompare = compareCanvas.getContext('2d');
+                
+                const labels = ['超大单', '大单', '中单', '小单'];
+                const inflowData = [];
+                const outflowData = [];
+                
+                labels.forEach(label => {
+                    const inflowKey = label + '流入';
+                    const outflowKey = label + '流出';
+                    const inflowVal = moneyFlowData[inflowKey];
+                    const outflowVal = moneyFlowData[outflowKey];
+                    const inflowNum = parseFloat(inflowVal) || 0;
+                    const outflowNum = parseFloat(outflowVal) || 0;
+                    
+                    inflowData.push(inflowNum);
+                    outflowData.push(outflowNum);
+                });
+                
+                // 销毁旧图表
+                if (window.moneyFlowCompareChartInstance) {
+                    window.moneyFlowCompareChartInstance.destroy();
+                }
+                
+                window.moneyFlowCompareChartInstance = new Chart(ctxCompare, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                label: '流入',
+                                data: inflowData,
+                                backgroundColor: 'rgba(220, 38, 38, 0.9)',
+                                borderColor: 'rgb(220, 38, 38)',
+                                borderWidth: 1
+                            },
+                            {
+                                label: '流出',
+                                data: outflowData.map(v => -v),
+                                backgroundColor: 'rgba(34, 197, 94, 0.9)',
+                                borderColor: 'rgb(34, 197, 94)',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                                labels: { color: textColor }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const value = Math.abs(context.parsed.y);
+                                        return context.dataset.label + ': ' + formatMoneyFlow(value);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: textColor },
+                                grid: { display: false }
+                            },
+                            y: {
+                                ticks: {
+                                    color: textColor,
+                                    callback: function(value) {
+                                        const absVal = Math.abs(value);
+                                        return absVal >= 10000 ? (absVal / 10000).toFixed(2) + '亿' : absVal + '万';
+                                    }
+                                },
+                                grid: { color: gridColor }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // 绘制技术指标图表
+        if (technicalIndicators && Object.keys(technicalIndicators).length > 0) {
+            const textColor = document.body.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#1f2328';
+            const gridColor = document.body.getAttribute('data-theme') === 'dark' ? '#30363d' : '#e5e7eb';
+            
+            // 图表1：均线系统
+            const emaCanvas = document.getElementById('emaChart');
+            if (emaCanvas) {
+                const ctxEma = emaCanvas.getContext('2d');
+                
+                const emaData = {
+                    labels: ['EMA5', 'EMA10', 'EMA20'],
+                    datasets: [{
+                        label: '均线值',
+                        data: [
+                            parseFloat(technicalIndicators['EMA5']) || 0,
+                            parseFloat(technicalIndicators['EMA10']) || 0,
+                            parseFloat(technicalIndicators['EMA20']) || 0
+                        ],
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                };
+                
+                if (window.emaChartInstance) {
+                    window.emaChartInstance.destroy();
+                }
+                
+                window.emaChartInstance = new Chart(ctxEma, {
+                    type: 'line',
+                    data: emaData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.parsed.y.toFixed(2);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: textColor },
+                                grid: { color: gridColor }
+                            },
+                            y: {
+                                ticks: { color: textColor },
+                                grid: { color: gridColor }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 图表2：RSI & KDJ
+            const rsiKdjCanvas = document.getElementById('rsiKdjChart');
+            if (rsiKdjCanvas) {
+                const ctxRsiKdj = rsiKdjCanvas.getContext('2d');
+                
+                const rsiKdjData = {
+                    labels: ['RSI14', 'K', 'D', 'J'],
+                    datasets: [{
+                        label: '数值',
+                        data: [
+                            parseFloat(technicalIndicators['RSI14']) || 0,
+                            parseFloat(technicalIndicators['K']) || 0,
+                            parseFloat(technicalIndicators['D']) || 0,
+                            parseFloat(technicalIndicators['J']) || 0
+                        ],
+                        backgroundColor: [
+                            'rgba(168, 85, 247, 0.8)',
+                            'rgba(249, 115, 22, 0.8)',
+                            'rgba(34, 197, 94, 0.8)',
+                            'rgba(236, 72, 153, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgb(168, 85, 247)',
+                            'rgb(249, 115, 22)',
+                            'rgb(34, 197, 94)',
+                            'rgb(236, 72, 153)'
+                        ],
+                        borderWidth: 1
+                    }]
+                };
+                
+                if (window.rsiKdjChartInstance) {
+                    window.rsiKdjChartInstance.destroy();
+                }
+                
+                window.rsiKdjChartInstance = new Chart(ctxRsiKdj, {
+                    type: 'bar',
+                    data: rsiKdjData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return context.parsed.y.toFixed(2);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { color: textColor },
+                                grid: { display: false }
+                            },
+                            y: {
+                                ticks: { color: textColor },
+                                grid: { color: gridColor }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 图表3：布林带
+            const bollingerCanvas = document.getElementById('bollingerChart');
+            if (bollingerCanvas) {
+                const ctxBollinger = bollingerCanvas.getContext('2d');
+                
+                // 获取布林带数据
+                const upperBand = parseFloat(technicalIndicators['布林带上轨']) || 0;
+                const middleBand = parseFloat(technicalIndicators['布林带中轨']) || 0;
+                const lowerBand = parseFloat(technicalIndicators['布林带下轨']) || 0;
+                const pricePosition = parseFloat(technicalIndicators['价格位置']) || 0;
+                
+                // 计算当前价格（根据价格位置在上中下轨之间的位置）
+                const currentPrice = lowerBand + (upperBand - lowerBand) * (pricePosition / 100);
+                
+                // 创建布林带数据结构：三条水平平行线
+                // 通过创建多个x轴点并保持相同的y值来形成水平线
+                const bollingerData = {
+                    labels: ['', '', '', '', ''], // 5个x轴点，形成一条水平线
+                    datasets: [
+                        {
+                            label: '上轨',
+                            data: [upperBand, upperBand, upperBand, upperBand, upperBand],
+                            borderColor: 'rgba(245, 158, 11, 1)',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 0 // 不显示点，只显示线
+                        },
+                        {
+                            label: '中轨',
+                            data: [middleBand, middleBand, middleBand, middleBand, middleBand],
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 0 // 不显示点，只显示线
+                        },
+                        {
+                            label: '下轨',
+                            data: [lowerBand, lowerBand, lowerBand, lowerBand, lowerBand],
+                            borderColor: 'rgba(16, 185, 129, 1)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 0 // 不显示点，只显示线
+                        },
+                        {
+                            label: '价格位置',
+                            data: [null, null, currentPrice, null, null], // 只在中间显示价格位置
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                            borderWidth: 0, // 不显示线，只显示点
+                            fill: false,
+                            pointRadius: 8,
+                            pointHoverRadius: 10,
+                            pointStyle: 'circle'
+                        }
+                    ]
+                };
+                
+                if (window.bollingerChartInstance) {
+                    window.bollingerChartInstance.destroy();
+                }
+                
+                window.bollingerChartInstance = new Chart(ctxBollinger, {
+                    type: 'line',
+                    data: bollingerData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                                labels: {
+                                    color: textColor,
+                                    font: {
+                                        size: 12
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y.toFixed(2);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                display: false, // 隐藏x轴，因为我们只需要显示垂直位置
+                                grid: {
+                                    display: false // 隐藏x轴网格线
+                                }
+                            },
+                            y: {
+                                ticks: { color: textColor },
+                                grid: { color: gridColor },
+                                // 设置y轴范围，确保所有数据点都能显示
+                                suggestedMin: Math.min(lowerBand, currentPrice) * 0.95,
+                                suggestedMax: Math.max(upperBand, currentPrice) * 1.05
+                            }
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    // 复盘数据功能
+    let reviewRecordCount = 0;
+    
+    // 添加复盘记录
+    document.getElementById('addReviewBtn').addEventListener('click', function() {
+        reviewRecordCount++;
+        
+        const reviewRecord = document.createElement('div');
+        reviewRecord.className = 'review-record flex gap-2 items-center border border-border-color rounded p-3 bg-hover-bg';
+        reviewRecord.dataset.id = reviewRecordCount;
+        
+        reviewRecord.innerHTML = `
+            <select name="review_type_${reviewRecordCount}" class="w-1/5 bg-input-bg border border-border-color rounded p-2 outline-none">
+                <option value="buy">买入</option>
+                <option value="sell">卖出</option>
+            </select>
+            <input type="number" step="0.01" name="review_price_${reviewRecordCount}" placeholder="价格" class="w-1/5 bg-input-bg border border-border-color rounded p-2 outline-none">
+            <input type="time" name="review_time_${reviewRecordCount}" class="w-1/5 bg-input-bg border border-border-color rounded p-2 outline-none" title="点击选择时间">
+            <input type="number" name="review_remaining_${reviewRecordCount}" placeholder="剩余数量" class="w-1/5 bg-input-bg border border-border-color rounded p-2 outline-none">
+            <button type="button" class="remove-review-btn text-red-400 hover:text-red-300" data-id="${reviewRecordCount}">删除</button>
+        `;
+        
+        document.getElementById('reviewDataContainer').appendChild(reviewRecord);
+        document.getElementById('emptyReviewHint').classList.add('hidden');
+        
+        // 禁用时间输入的鼠标滚轮事件
+        const timeInput = reviewRecord.querySelector(`input[name^="review_time_"]`);
+        timeInput.addEventListener('wheel', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+        
+        // 添加删除事件
+        reviewRecord.querySelector('.remove-review-btn').addEventListener('click', function() {
+            const id = this.dataset.id;
+            const record = document.querySelector(`.review-record[data-id="${id}"]`);
+            if (record) {
+                record.remove();
+            }
+            
+            // 检查是否还有记录
+            if (document.querySelectorAll('.review-record').length === 0) {
+                document.getElementById('emptyReviewHint').classList.remove('hidden');
+            }
+        });
+    });
+
+    // 股票名称搜索功能
+    searchBtn.addEventListener('click', async () => {
+        const stockName = stockNameInput.value.trim();
+        if (!stockName) {
+                alert('请输入股票/基金名称');
+                return;
+            }
+        
+        searchBtn.disabled = true;
+        searchBtn.innerText = '搜索中...';
+        searchResults.innerHTML = '<div class="text-blue-400 animate-pulse">正在搜索股票/基金...</div>';
+        searchResults.classList.remove('hidden');
+        
+        try {
+            // 调用后端真实的股票搜索API
+            const response = await fetch(`backend.php?action=search_stock&name=${encodeURIComponent(stockName)}`);
+            
+            if (!response.ok) {
+                throw new Error('网络请求失败: ' + response.status);
+            }
+            
+            // 先获取文本内容，便于调试
+            const text = await response.text();
+            console.log('后端返回数据:', text);
+            
+            // 尝试解析JSON
+            const data = JSON.parse(text);
+            
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            
+            const matchedStocks = data.stocks || [];
+            
+            if (matchedStocks.length === 0) {
+                searchResults.innerHTML = '<div class="text-gray-400">未找到匹配的股票</div>';
+            } else {
+                let resultsHtml = '';
+                matchedStocks.forEach(stock => {
+                    resultsHtml += `
+                        <div class="flex justify-between items-center p-2 hover:bg-hover-bg rounded cursor-pointer stock-item" data-code="${stock.code}" data-market="${stock.market}">
+                            <div>
+                                <div class="font-medium">${stock.name}</div>
+                                <div class="text-xs text-gray-400">${stock.fullCode}</div>
+                            </div>
+                            <button class="text-blue-400 text-sm select-stock">选择</button>
+                        </div>
+                    `;
+                });
+                searchResults.innerHTML = resultsHtml;
+                
+                // 添加选择按钮事件
+                document.querySelectorAll('.select-stock').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const stockItem = this.closest('.stock-item');
+                        const code = stockItem.dataset.code;
+                        const market = stockItem.dataset.market;
+                        const fullCode = `${market}${code}`;
+                        const stockName = stockItem.querySelector('.font-medium').textContent;
+                        
+                        // 填充股票代码输入框
+                        symbolInput.value = code;
+                        
+                        // 显示确认信息
+                        searchResults.innerHTML = `<div class="text-green-400">已选择: ${stockName} (${fullCode})</div>`;
+                        
+                        // 3秒后隐藏结果
+                        setTimeout(() => {
+                            searchResults.classList.add('hidden');
+                        }, 3000);
+                    });
+                });
+            }
+        } catch (error) {
+            searchResults.innerHTML = `<div class="text-red-400">搜索失败: ${error.message}</div>`;
+        } finally {
+            searchBtn.disabled = false;
+            searchBtn.innerText = '搜索';
+        }
+    });
+
+    // 点击外部关闭搜索结果
+    document.addEventListener('click', (e) => {
+        if (!searchBtn.contains(e.target) && !stockNameInput.contains(e.target) && !searchResults.contains(e.target)) {
+            searchResults.classList.add('hidden');
+        }
+    });
+    
+    // 主题切换功能
+    const themeToggle = document.getElementById('themeToggle');
+    const body = document.body;
+    
+    // 保存当前显示的市场数据，用于主题切换时重新渲染
+    let currentDisplayedMarketData = null;
+    
+    // 加载保存的主题
+    function loadTheme() {
+        const savedTheme = getStorage('theme');
+        if (savedTheme) {
+            setTheme(savedTheme);
+        }
+    }
+    
+    // 设置主题
+    function setTheme(theme) {
+        body.setAttribute('data-theme', theme);
+        setStorage('theme', theme, 365);
+        
+        // 更新主题切换按钮
+        if (theme === 'dark') {
+            document.querySelector('.dark-icon').classList.remove('hidden');
+            document.querySelector('.light-icon').classList.add('hidden');
+            document.querySelector('.dark-text').classList.remove('hidden');
+            document.querySelector('.light-text').classList.add('hidden');
+        } else {
+            document.querySelector('.dark-icon').classList.add('hidden');
+            document.querySelector('.light-icon').classList.remove('hidden');
+            document.querySelector('.dark-text').classList.add('hidden');
+            document.querySelector('.light-text').classList.remove('hidden');
+        }
+        
+        // 更新CSS变量
+        updateCSSVariables(theme);
+        
+        // 如果有显示的市场数据，重新渲染以更新图表颜色
+        if (currentDisplayedMarketData && !marketCard.classList.contains('hidden')) {
+            renderMarketTable(currentDisplayedMarketData);
+        }
+    }
+    
+    // 更新CSS变量
+    function updateCSSVariables(theme) {
+        console.log('更新CSS变量，主题:', theme);
+        if (theme === 'dark') {
+            document.documentElement.style.setProperty('--bg-color', '#0d1117');
+            document.documentElement.style.setProperty('--text-color', '#c9d1d9');
+            document.documentElement.style.setProperty('--card-bg', '#161b22');
+            document.documentElement.style.setProperty('--border-color', '#30363d');
+            document.documentElement.style.setProperty('--input-bg', '#0d1117');
+            document.documentElement.style.setProperty('--hover-bg', '#21262d');
+            document.documentElement.style.setProperty('--gray-400', '#8b949e');
+            document.documentElement.style.setProperty('--gray-500', '#6e7681');
+        } else {
+            document.documentElement.style.setProperty('--bg-color', '#ffffff');
+            document.documentElement.style.setProperty('--text-color', '#333333');
+            document.documentElement.style.setProperty('--card-bg', '#f8f9fa');
+            document.documentElement.style.setProperty('--border-color', '#dee2e6');
+            document.documentElement.style.setProperty('--input-bg', '#ffffff');
+            document.documentElement.style.setProperty('--hover-bg', '#e9ecef');
+            document.documentElement.style.setProperty('--gray-400', '#6c757d');
+            document.documentElement.style.setProperty('--gray-500', '#adb5bd');
+        }
+        console.log('CSS变量更新完成');
+    }
+    
+    // 切换主题
+    themeToggle.addEventListener('click', function() {
+        console.log('点击主题切换按钮');
+        const currentTheme = body.getAttribute('data-theme');
+        console.log('当前主题:', currentTheme);
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        console.log('切换到主题:', newTheme);
+        setTheme(newTheme);
+    });
+</script>
+</body>
+</html>

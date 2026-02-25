@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台管理 - AI 股票分析系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS变量 - 默认浅色模式 */
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1f2328;
+            --card-bg: #f6f8fa;
+            --border-color: #d1d9e0;
+            --input-bg: #ffffff;
+            --hover-bg: #f3f4f6;
+            --gray-400: #656d76;
+            --gray-500: #8b949e;
+            --primary-color: #238636;
+            --primary-hover: #2ea043;
+            --blue-400: #0969da;
+            --red-400: #cf222e;
+            --green-400: #1a7f37;
+        }
+        
+        /* 深色模式变量 */
+        body[data-theme="dark"] {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --card-bg: #161b22;
+            --border-color: #30363d;
+            --input-bg: #0d1117;
+            --hover-bg: #21262d;
+            --gray-400: #8b949e;
+            --gray-500: #6e7681;
+            --blue-400: #58a6ff;
+            --red-400: #f85149;
+            --green-400: #7ee787;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            min-height: 100vh;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        
+        input, select, textarea {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--blue-400);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+        
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            border-right: 1px solid var(--border-color);
+        }
+        
+        .main-content {
+            flex: 1;
+            min-height: 100vh;
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                min-height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--border-color);
+            }
+            
+            body {
+                font-size: 16px;
+            }
+            
+            input, select, textarea {
+                padding: 0.875rem;
+                min-height: 44px;
+            }
+            
+            button {
+                padding: 0.875rem 1.75rem;
+                min-height: 44px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="flex flex-col md:flex-row">
+        <!-- 侧边栏 -->
+        <div class="sidebar bg-card-bg p-4">
+            <div class="flex items-center gap-2 mb-8">
+                <h1 class="text-xl font-bold" id="adminTitle">管理后台</h1>
+            </div>
+            
+            <nav>
+                <ul class="space-y-2">
+                    <li>
+                        <button class="nav-btn w-full text-left px-4 py-2 rounded hover:bg-hover-bg transition-colors" data-target="users">
+                            用户管理
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn w-full text-left px-4 py-2 rounded hover:bg-hover-bg transition-colors" data-target="settings">
+                            系统设置
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn w-full text-left px-4 py-2 rounded hover:bg-hover-bg transition-colors" data-target="recharge">
+                            充值管理
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn w-full text-left px-4 py-2 rounded hover:bg-hover-bg transition-colors" data-target="logs">
+                            系统日志
+                        </button>
+                    </li>
+                    <li>
+                        <button class="nav-btn w-full text-left px-4 py-2 rounded hover:bg-hover-bg transition-colors" data-target="password">
+                            修改密码
+                        </button>
+                    </li>
+                    <li class="mt-8">
+                        <button id="logoutBtn" class="w-full px-4 py-2 border border-border-color rounded hover:bg-hover-bg transition-colors">
+                            退出登录
+                        </button>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="main-content p-6">
+            <!-- 顶部导航 -->
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold" id="pageTitle">用户管理</h2>
+                <div class="flex items-center gap-4">
+                    <button type="button" id="themeToggle" class="flex items-center gap-2 px-4 py-2 rounded-full border border-border-color hover:bg-hover-bg transition-colors">
+                        <span class="dark-icon hidden">🌙</span>
+                        <span class="light-icon">☀️</span>
+                        <span class="dark-text hidden">深色模式</span>
+                        <span class="light-text">浅色模式</span>
+                    </button>
+                    <span id="adminInfo" class="text-gray-400">管理员: 未知</span>
+                </div>
+            </div>
+            
+            <!-- 页面内容 -->
+            <div class="page-content">
+                <!-- 用户管理页面 -->
+                <div id="users" class="page-section">
+                    <div class="card p-6 mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold">用户列表</h3>
+                            <div class="flex items-center gap-2">
+                                <input type="text" id="userSearch" placeholder="搜索用户" class="px-4 py-2 rounded border border-border-color">
+                                <button id="searchUserBtn" class="px-4 py-2 border border-border-color rounded hover:bg-hover-bg transition-colors">
+                                    搜索
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b border-border-color">
+                                        <th class="px-4 py-3 text-left">ID</th>
+                                        <th class="px-4 py-3 text-left">用户名</th>
+                                        <th class="px-4 py-3 text-left">昵称</th>
+                                        <th class="px-4 py-3 text-left">积分</th>
+                                        <th class="px-4 py-3 text-left">注册时间</th>
+                                        <th class="px-4 py-3 text-left">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="userList">
+                                    <!-- 用户列表将通过JS动态加载 -->
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+                                            加载中...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- 分页 -->
+                        <div class="flex justify-between items-center mt-4">
+                            <span class="text-gray-400" id="userPaginationInfo">
+                                显示 1-10 条，共 0 条
+                            </span>
+                            <div class="flex items-center gap-2">
+                                <button id="prevPage" class="px-3 py-1 border border-border-color rounded hover:bg-hover-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    上一页
+                                </button>
+                                <button id="nextPage" class="px-3 py-1 border border-border-color rounded hover:bg-hover-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    下一页
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 增加积分弹窗 -->
+                    <div id="addPointsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                        <div class="card p-6 w-full max-w-md">
+                            <h3 class="text-lg font-bold mb-4">增加积分</h3>
+                            <input type="hidden" id="userIdInput">
+                            <div class="mb-4">
+                                <label class="block text-xs text-gray-500 mb-1">用户</label>
+                                <input type="text" id="userNameInput" disabled class="w-full px-4 py-2 rounded border border-border-color">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-xs text-gray-500 mb-1">增加积分</label>
+                                <input type="number" id="pointsInput" min="1" class="w-full px-4 py-2 rounded border border-border-color">
+                            </div>
+                            <div class="mb-4">
+                                <label class="block text-xs text-gray-500 mb-1">原因</label>
+                                <textarea id="reasonInput" class="w-full px-4 py-2 rounded border border-border-color" rows="3"></textarea>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="cancelAddPoints" class="flex-1 px-4 py-2 border border-border-color rounded hover:bg-hover-bg transition-colors">
+                                    取消
+                                </button>
+                                <button id="confirmAddPoints" class="flex-1 px-4 py-2 btn-primary text-white rounded">
+                                    确认
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+
+                    
+                    <!-- 积分历史弹窗 -->
+                    <div id="pointsHistoryModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                        <div class="card p-6 w-full max-w-lg">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold">积分历史</h3>
+                                <button id="closePointsHistory" class="text-gray-400 hover:text-gray-200">
+                                    ✕
+                                </button>
+                            </div>
+                            <div class="mb-4">
+                                <input type="hidden" id="pointsHistoryUserId">
+                                <div class="mb-4">
+                                    <label class="block text-xs text-gray-500 mb-1">用户</label>
+                                    <input type="text" id="pointsHistoryUserName" disabled class="w-full px-4 py-2 rounded border border-border-color">
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full">
+                                        <thead>
+                                            <tr class="border-b border-border-color">
+                                                <th class="px-4 py-2 text-left text-sm">时间</th>
+                                                <th class="px-4 py-2 text-left text-sm">类型</th>
+                                                <th class="px-4 py-2 text-left text-sm">积分</th>
+                                                <th class="px-4 py-2 text-left text-sm">原因</th>
+                                                <th class="px-4 py-2 text-left text-sm">操作人</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="pointsHistoryList">
+                                            <tr>
+                                                <td colspan="5" class="px-4 py-6 text-center text-gray-400">
+                                                    加载中...
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 系统设置页面 -->
+                <div id="settings" class="page-section hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- AI 设置 -->
+                        <div class="card p-6">
+                            <h3 class="text-lg font-bold mb-4">AI 设置</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">DeepSeek API Key</label>
+                                    <input type="text" id="deepseekApiKey" class="w-full px-4 py-2 rounded border border-border-color">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">默认 DeepSeek 模型</label>
+                                    <select id="defaultModel" class="w-full px-4 py-2 rounded border border-border-color">
+                                        <option value="deepseek-chat">deepseek-chat</option>
+                                        <option value="deepseek-reasoner">deepseek-reasoner (思考模式)</option>
+                                    </select>
+                                </div>
+                                <div class="pt-4 border-t border-border-color">
+                                    <label class="block text-xs text-gray-500 mb-2">DeepSeek 账户余额</label>
+                                    <div id="deepseekBalanceDisplay" class="text-2xl font-bold text-blue-400 mb-2">--</div>
+                                    <button type="button" id="refreshBalanceBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm">
+                                        刷新余额
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+
+                        
+                        <!-- 系统设置 -->
+                        <div class="card p-6">
+                            <h3 class="text-lg font-bold mb-4">系统设置</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">系统名称</label>
+                                    <input type="text" id="systemName" placeholder="AI 股票穿透分析系统" class="w-full px-4 py-2 rounded border border-border-color">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">新用户注册赠送积分</label>
+                                    <input type="number" id="newUserPoints" min="0" class="w-full px-4 py-2 rounded border border-border-color">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">标准模式（deepseek-chat）扣除积分</label>
+                                    <input type="number" id="analysisCostChat" min="1" class="w-full px-4 py-2 rounded border border-border-color">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-500 mb-1">思考模式（deepseek-reasoner）扣除积分</label>
+                                    <input type="number" id="analysisCostReasoner" min="1" class="w-full px-4 py-2 rounded border border-border-color">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 保存按钮 -->
+                        <div class="md:col-span-2 flex justify-end">
+                            <button id="saveSettingsBtn" class="px-6 py-2 btn-primary text-white rounded">
+                                保存设置
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 充值管理页面 -->
+                <div id="recharge" class="page-section hidden">
+                    <div class="card p-6">
+                        <h3 class="text-lg font-bold mb-4">充值设置</h3>
+                        <div class="space-y-6">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">微信收款二维码</label>
+                                <div class="border border-border-color rounded p-4 bg-hover-bg mb-2">
+                                    <img id="rechargeQrcodePreview" src="" alt="微信收款二维码" class="w-48 h-48 object-contain">
+                                </div>
+                                <input type="text" id="rechargeQrcode" placeholder="请输入二维码图片URL" class="w-full px-4 py-2 rounded border border-border-color">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">充值注意事项</label>
+                                <textarea id="rechargeNotes" class="w-full px-4 py-2 rounded border border-border-color" rows="5" placeholder="请输入充值注意事项，每行一条"></textarea>
+                            </div>
+                            <div class="flex justify-end">
+                                <button id="saveRechargeBtn" class="px-6 py-2 btn-primary text-white rounded">
+                                    保存设置
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 系统日志页面 -->
+                <div id="logs" class="page-section hidden">
+                    <div class="card p-6">
+                        <h3 class="text-lg font-bold mb-4">系统日志</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b border-border-color">
+                                        <th class="px-4 py-3 text-left">时间</th>
+                                        <th class="px-4 py-3 text-left">类型</th>
+                                        <th class="px-4 py-3 text-left">内容</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logList">
+                                    <tr>
+                                        <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+                                            暂无日志记录
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 修改密码页面 -->
+                <div id="password" class="page-section hidden">
+                    <div class="card p-6 max-w-md">
+                        <h3 class="text-lg font-bold mb-4">修改密码</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">原密码</label>
+                                <input type="password" id="oldPassword" class="w-full px-4 py-2 rounded border border-border-color">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">新密码</label>
+                                <input type="password" id="newPassword" class="w-full px-4 py-2 rounded border border-border-color">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-gray-500 mb-1">确认新密码</label>
+                                <input type="password" id="confirmPassword" class="w-full px-4 py-2 rounded border border-border-color">
+                            </div>
+                            <button id="savePasswordBtn" class="w-full px-6 py-2 btn-primary text-white rounded">
+                                保存密码
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 页面状态
+        let currentPage = 'users';
+        let currentUserPage = 1;
+        const usersPerPage = 10;
+        
+        // 初始化页面
+        async function initPage() {
+            // 检查登录状态
+            if (!await checkAdminLogin()) {
+                window.location.href = 'admin_login.html';
+                return;
+            }
+            
+            // 加载用户管理页面
+            await loadUsers();
+            
+            // 加载系统设置
+            await loadSettings();
+            
+            // 加载充值设置
+            await loadRechargeSettings();
+        }
+        
+        // 检查管理员登录状态
+        async function checkAdminLogin() {
+            try {
+                const response = await fetch('admin.php?action=checklogin');
+                const data = await response.json();
+                
+                if (data.logged) {
+                    document.getElementById('adminInfo').textContent = `管理员: ${data.admin.username}`;
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+                return false;
+            }
+        }
+        
+        // 加载用户列表
+        async function loadUsers(page = 1) {
+            const userList = document.getElementById('userList');
+            userList.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-blue-400 animate-pulse">正在加载用户列表...</td></tr>';
+            
+            try {
+                const response = await fetch(`admin.php?action=getusers&page=${page}&perpage=${usersPerPage}`);
+                const data = await response.json();
+                
+                userList.innerHTML = '';
+                
+                if (data.users && data.users.length > 0) {
+                    data.users.forEach(user => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'border-b border-border-color hover:bg-hover-bg';
+                        tr.innerHTML = `
+                            <td class="px-4 py-3">${user.id}</td>
+                            <td class="px-4 py-3">${user.username}</td>
+                            <td class="px-4 py-3">${user.nickname || '用户'}</td>
+                            <td class="px-4 py-3">${user.points}</td>
+                            <td class="px-4 py-3 text-gray-400 text-sm">${user.created_at}</td>
+                            <td class="px-4 py-3">
+                                <button class="addPointsBtn px-3 py-1 text-sm border border-border-color rounded hover:bg-hover-bg transition-colors" data-id="${user.id}" data-name="${user.nickname || '用户'}">
+                                    增加积分
+                                </button>
+                                <button class="viewPointsHistoryBtn px-3 py-1 text-sm border border-border-color rounded hover:bg-hover-bg transition-colors ml-2" data-id="${user.id}" data-name="${user.nickname || '用户'}">
+                                    积分历史
+                                </button>
+                            </td>
+                        `;
+                        userList.appendChild(tr);
+                    });
+                    
+                    // 更新分页信息
+                    document.getElementById('userPaginationInfo').textContent = 
+                        `显示 ${(page - 1) * usersPerPage + 1}-${Math.min(page * usersPerPage, data.total)} 条，共 ${data.total} 条`;
+                    
+                    // 更新分页按钮状态
+                    document.getElementById('prevPage').disabled = page === 1;
+                    document.getElementById('nextPage').disabled = page * usersPerPage >= data.total;
+                    
+                    // 绑定增加积分按钮事件
+                    document.querySelectorAll('.addPointsBtn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const userId = this.getAttribute('data-id');
+                            const userName = this.getAttribute('data-name');
+                            openAddPointsModal(userId, userName);
+                        });
+                    });
+                    
+                    // 绑定积分历史按钮事件
+                    document.querySelectorAll('.viewPointsHistoryBtn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const userId = this.getAttribute('data-id');
+                            const userName = this.getAttribute('data-name');
+                            openPointsHistoryModal(userId, userName);
+                        });
+                    });
+                } else {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td colspan="6" class="px-4 py-8 text-center text-gray-400">暂无用户</td>';
+                    userList.appendChild(tr);
+                }
+            } catch (error) {
+                console.error('加载用户列表失败:', error);
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="6" class="px-4 py-8 text-center text-gray-400">加载失败</td>';
+                document.getElementById('userList').appendChild(tr);
+            }
+        }
+        
+        // 打开增加积分弹窗
+        function openAddPointsModal(userId, userName) {
+            document.getElementById('userIdInput').value = userId;
+            document.getElementById('userNameInput').value = userName;
+            document.getElementById('pointsInput').value = '';
+            document.getElementById('reasonInput').value = '';
+            document.getElementById('addPointsModal').classList.remove('hidden');
+        }
+        
+        // 打开积分历史弹窗
+        function openPointsHistoryModal(userId, userName) {
+            document.getElementById('pointsHistoryUserId').value = userId;
+            document.getElementById('pointsHistoryUserName').value = userName;
+            document.getElementById('pointsHistoryModal').classList.remove('hidden');
+            loadPointsHistory(userId);
+        }
+        
+        // 加载积分历史
+        async function loadPointsHistory(userId) {
+            const historyList = document.getElementById('pointsHistoryList');
+            historyList.innerHTML = '<tr><td colspan="5" class="px-4 py-6 text-center text-blue-400 animate-pulse">正在加载积分历史...</td></tr>';
+            
+            try {
+                const response = await fetch(`admin.php?action=getpointshistory&user_id=${userId}`);
+                const data = await response.json();
+                
+                historyList.innerHTML = '';
+                
+                if (data.success && data.history && data.history.length > 0) {
+                    data.history.forEach(record => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'border-b border-border-color';
+                        tr.innerHTML = `
+                            <td class="px-4 py-2 text-sm">${record.created_at}</td>
+                            <td class="px-4 py-2 text-sm">${record.type === 'add' ? '增加' : '扣除'}</td>
+                            <td class="px-4 py-2 text-sm">${record.points}</td>
+                            <td class="px-4 py-2 text-sm">${record.reason}</td>
+                            <td class="px-4 py-2 text-sm">${record.admin_username || '系统'}</td>
+                        `;
+                        historyList.appendChild(tr);
+                    });
+                } else {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td colspan="5" class="px-4 py-6 text-center text-gray-400">暂无积分历史记录</td>';
+                    historyList.appendChild(tr);
+                }
+            } catch (error) {
+                console.error('加载积分历史失败:', error);
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td colspan="5" class="px-4 py-6 text-center text-gray-400">加载失败</td>';
+                document.getElementById('pointsHistoryList').appendChild(tr);
+            }
+        }
+        
+        // 加载系统设置
+        async function loadSettings() {
+            try {
+                const response = await fetch('admin.php?action=getsettings');
+                const data = await response.json();
+                
+                if (data.settings) {
+                    document.getElementById('deepseekApiKey').value = data.settings.deepseek_api_key || '';
+                    document.getElementById('defaultModel').value = data.settings.default_model || 'deepseek-chat';
+                    document.getElementById('newUserPoints').value = data.settings.new_user_points || 20;
+                    document.getElementById('analysisCostChat').value = data.settings.analysis_cost_chat || 1;
+                    document.getElementById('analysisCostReasoner').value = data.settings.analysis_cost_reasoner || 2;
+                    document.getElementById('systemName').value = data.settings.system_name || 'AI 股票穿透分析系统';
+                }
+                
+                // 加载DeepSeek余额
+                await refreshDeepSeekBalance();
+            } catch (error) {
+                console.error('加载系统设置失败:', error);
+            }
+        }
+        
+        // 刷新DeepSeek余额
+        async function refreshDeepSeekBalance() {
+            const balanceDisplay = document.getElementById('deepseekBalanceDisplay');
+            balanceDisplay.innerHTML = '<span class="animate-pulse">正在查询...</span>';
+            
+            try {
+                const response = await fetch('admin.php?action=getdeepseekbalance');
+                const data = await response.json();
+                
+                if (data.success && data.balance) {
+                    let balanceHtml = '';
+                    if (data.balance.balance_infos && data.balance.balance_infos.length > 0) {
+                        data.balance.balance_infos.forEach(info => {
+                            balanceHtml += `<div class="text-lg">${info.currency}: <span class="font-bold text-green-400">${info.total_balance}</span></div>`;
+                            if (info.granted_balance) {
+                                balanceHtml += `<div class="text-sm text-gray-400">赠送余额: ${info.granted_balance}</div>`;
+                            }
+                        });
+                    } else if (data.balance.total_balance) {
+                        balanceHtml = `<span class="font-bold text-green-400">${data.balance.total_balance}</span>`;
+                    } else {
+                        balanceHtml = JSON.stringify(data.balance);
+                    }
+                    balanceDisplay.innerHTML = balanceHtml;
+                } else {
+                    balanceDisplay.innerHTML = `<span class="text-red-400">${data.error || '查询失败'}</span>`;
+                }
+            } catch (error) {
+                console.error('查询DeepSeek余额失败:', error);
+                balanceDisplay.innerHTML = '<span class="text-red-400">查询失败</span>';
+            }
+        }
+        
+        // 加载充值设置
+        async function loadRechargeSettings() {
+            try {
+                const response = await fetch('admin.php?action=getrechargesettings');
+                const data = await response.json();
+                
+                if (data.qrcode) {
+                    document.getElementById('rechargeQrcode').value = data.qrcode;
+                    document.getElementById('rechargeQrcodePreview').src = data.qrcode;
+                }
+                
+                if (data.notes) {
+                    document.getElementById('rechargeNotes').value = data.notes;
+                }
+            } catch (error) {
+                console.error('加载充值设置失败:', error);
+            }
+        }
+        
+        // 加载系统日志
+        async function loadSystemLogs() {
+            const logList = document.getElementById('logList');
+            logList.innerHTML = '<tr><td colspan="3" class="px-4 py-8 text-center text-blue-400 animate-pulse">正在加载系统日志...</td></tr>';
+            
+            try {
+                const response = await fetch('admin.php?action=getlogs');
+                const data = await response.json();
+                
+                if (data.success && data.logs && data.logs.length > 0) {
+                    const logList = document.getElementById('logList');
+                    logList.innerHTML = '';
+                    
+                    data.logs.forEach(log => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'border-b border-border-color';
+                        tr.innerHTML = `
+                            <td class="px-4 py-2">${log.created_at}</td>
+                            <td class="px-4 py-2">${log.type}</td>
+                            <td class="px-4 py-2">${log.content}</td>
+                        `;
+                        logList.appendChild(tr);
+                    });
+                } else {
+                    document.getElementById('logList').innerHTML = `
+                        <tr>
+                            <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+                                暂无日志记录
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                console.error('加载系统日志失败:', error);
+                document.getElementById('logList').innerHTML = `
+                    <tr>
+                        <td colspan="3" class="px-4 py-8 text-center text-gray-400">
+                            加载失败
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        // 导航按钮点击事件
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const target = this.getAttribute('data-target');
+                switchPage(target);
+            });
+        });
+        
+        // 切换页面
+        function switchPage(page) {
+            currentPage = page;
+            
+            // 更新页面标题
+            const pageTitles = {
+                users: '用户管理',
+                settings: '系统设置',
+                recharge: '充值管理',
+                logs: '系统日志',
+                password: '修改密码'
+            };
+            document.getElementById('pageTitle').textContent = pageTitles[page] || '用户管理';
+            
+            // 隐藏所有页面
+            document.querySelectorAll('.page-section').forEach(section => {
+                section.classList.add('hidden');
+            });
+            
+            // 显示当前页面
+            document.getElementById(page).classList.remove('hidden');
+            
+            // 加载对应页面的数据
+            if (page === 'logs') {
+                loadSystemLogs();
+            }
+        }
+        
+        // 退出登录
+        document.getElementById('logoutBtn').addEventListener('click', async function() {
+            try {
+                const response = await fetch('admin.php?action=logout');
+                const data = await response.json();
+                
+                if (data.success) {
+                    window.location.href = 'admin_login.html';
+                }
+            } catch (error) {
+                console.error('退出登录失败:', error);
+            }
+        });
+        
+        // 分页按钮点击事件
+        document.getElementById('prevPage').addEventListener('click', function() {
+            if (currentUserPage > 1) {
+                currentUserPage--;
+                loadUsers(currentUserPage);
+            }
+        });
+        
+        document.getElementById('nextPage').addEventListener('click', function() {
+            currentUserPage++;
+            loadUsers(currentUserPage);
+        });
+        
+        // 增加积分弹窗事件
+        document.getElementById('cancelAddPoints').addEventListener('click', function() {
+            document.getElementById('addPointsModal').classList.add('hidden');
+        });
+        
+        // 积分历史弹窗事件
+        document.getElementById('closePointsHistory').addEventListener('click', function() {
+            document.getElementById('pointsHistoryModal').classList.add('hidden');
+        });
+        
+        document.getElementById('confirmAddPoints').addEventListener('click', async function() {
+            const userId = document.getElementById('userIdInput').value;
+            const points = document.getElementById('pointsInput').value;
+            const reason = document.getElementById('reasonInput').value;
+            
+            if (!points || points <= 0) {
+                alert('请输入有效的积分数量');
+                return;
+            }
+            
+            const btn = document.getElementById('confirmAddPoints');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '处理中...';
+            
+            try {
+                const response = await fetch('admin.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'addpoints',
+                        user_id: userId,
+                        points: points,
+                        reason: reason
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('addPointsModal').classList.add('hidden');
+                    loadUsers(currentUserPage);
+                    alert('积分增加成功');
+                } else {
+                    alert('积分增加失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('增加积分失败:', error);
+                alert('增加积分失败，请重试');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        });
+        
+        // 刷新DeepSeek余额按钮
+        document.getElementById('refreshBalanceBtn').addEventListener('click', async function() {
+            await refreshDeepSeekBalance();
+        });
+        
+        // 保存系统设置
+        document.getElementById('saveSettingsBtn').addEventListener('click', async function() {
+            const settings = {
+                deepseek_api_key: document.getElementById('deepseekApiKey').value,
+                default_model: document.getElementById('defaultModel').value,
+                new_user_points: document.getElementById('newUserPoints').value,
+                analysis_cost_chat: document.getElementById('analysisCostChat').value,
+                analysis_cost_reasoner: document.getElementById('analysisCostReasoner').value,
+                system_name: document.getElementById('systemName').value
+            };
+            
+            const btn = document.getElementById('saveSettingsBtn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '保存中...';
+            
+            try {
+                const response = await fetch('admin.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'savesettings',
+                        settings: settings
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('设置保存成功');
+                } else {
+                    alert('设置保存失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('保存设置失败:', error);
+                alert('保存设置失败，请重试');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        });
+        
+        // 保存充值设置
+        document.getElementById('saveRechargeBtn').addEventListener('click', async function() {
+            const qrcode = document.getElementById('rechargeQrcode').value;
+            const notes = document.getElementById('rechargeNotes').value;
+            
+            const btn = document.getElementById('saveRechargeBtn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '保存中...';
+            
+            try {
+                const response = await fetch('admin.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'saverechargesettings',
+                        qrcode: qrcode,
+                        notes: notes
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 更新预览
+                    if (qrcode) {
+                        document.getElementById('rechargeQrcodePreview').src = qrcode;
+                    }
+                    alert('充值设置保存成功');
+                } else {
+                    alert('充值设置保存失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('保存充值设置失败:', error);
+                alert('保存充值设置失败，请重试');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        });
+        
+
+        
+        // 加载保存的主题
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('adminTheme');
+            if (savedTheme) {
+                document.body.setAttribute('data-theme', savedTheme);
+                updateThemeToggle(savedTheme);
+            } else {
+                // 默认浅色模式
+                document.body.setAttribute('data-theme', 'light');
+                updateThemeToggle('light');
+            }
+        }
+        
+        // 更新主题切换按钮
+        function updateThemeToggle(theme) {
+            const darkIcon = document.querySelector('.dark-icon');
+            const lightIcon = document.querySelector('.light-icon');
+            const darkText = document.querySelector('.dark-text');
+            const lightText = document.querySelector('.light-text');
+            
+            if (theme === 'dark') {
+                darkIcon.classList.remove('hidden');
+                lightIcon.classList.add('hidden');
+                darkText.classList.remove('hidden');
+                lightText.classList.add('hidden');
+            } else {
+                darkIcon.classList.add('hidden');
+                lightIcon.classList.remove('hidden');
+                darkText.classList.add('hidden');
+                lightText.classList.remove('hidden');
+            }
+        }
+        
+        // 主题切换按钮点击事件
+        document.getElementById('themeToggle').addEventListener('click', function() {
+            const currentTheme = document.body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            
+            document.body.setAttribute('data-theme', newTheme);
+            updateThemeToggle(newTheme);
+            localStorage.setItem('adminTheme', newTheme);
+        });
+        
+        // 保存密码
+        document.getElementById('savePasswordBtn').addEventListener('click', async function() {
+            const oldPassword = document.getElementById('oldPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (!oldPassword || !newPassword || !confirmPassword) {
+                alert('请填写所有字段');
+                return;
+            }
+            
+            if (newPassword !== confirmPassword) {
+                alert('两次输入的新密码不一致');
+                return;
+            }
+            
+            const btn = document.getElementById('savePasswordBtn');
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '修改中...';
+            
+            try {
+                const response = await fetch('admin.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'changepassword',
+                        old_password: oldPassword,
+                        new_password: newPassword,
+                        confirm_password: confirmPassword
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('密码修改成功');
+                    document.getElementById('oldPassword').value = '';
+                    document.getElementById('newPassword').value = '';
+                    document.getElementById('confirmPassword').value = '';
+                } else {
+                    alert('密码修改失败: ' + (data.error || '未知错误'));
+                }
+            } catch (error) {
+                console.error('修改密码失败:', error);
+                alert('修改密码失败，请重试');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        });
+        
+        // 加载系统名称
+        async function loadSystemName() {
+            try {
+                const response = await fetch('backend.php?action=get_system_settings');
+                const data = await response.json();
+                
+                if (data.system_name) {
+                    document.getElementById('adminTitle').textContent = data.system_name;
+                    document.title = `后台管理 - ${data.system_name}`;
+                }
+            } catch (error) {
+                console.error('加载系统名称失败:', error);
+            }
+        }
+        
+        // 页面加载时初始化
+        window.onload = async function() {
+            loadSavedTheme();
+            await loadSystemName();
+            initPage();
+        };
+    </script>
+</body>
+</html>
