@@ -1166,8 +1166,14 @@ foreach ($stockNews as $newsItem) {
 // 处理用户持仓信息
 if (empty($shares) || empty($cost)) {
     $userPrompt .= "\n用户持仓：暂无持仓信息，为空仓用户提供分析。剩余资金 {$cash} 元。\n\n";
+    // 明确计算20%的资金量，确保AI正确理解
+    $twentyPercent = $cash * 0.2;
+    $userPrompt .= "提示：剩余资金的20%为 {$twentyPercent} 元，请在投资建议中使用正确的计算结果。\n\n";
 } else {
     $userPrompt .= "\n用户持仓：数 {$shares} 股/份，成本 {$cost} 元，剩余资金 {$cash} 元。\n\n";
+    // 明确计算20%的资金量，确保AI正确理解
+    $twentyPercent = $cash * 0.2;
+    $userPrompt .= "提示：剩余资金的20%为 {$twentyPercent} 元，请在投资建议中使用正确的计算结果。\n\n";
 }
 
 // 处理复盘数据

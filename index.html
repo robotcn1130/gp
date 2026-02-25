@@ -2407,25 +2407,30 @@
         }
         
         // 检查是否包含stockData和indexData（可能是直接传递了整个数据对象）
-        let stockData = data;
+        let processedData = data;
         let sectorData = null;
         let moneyFlowData = null;
         let technicalIndicators = null;
         
+        // 检查数据结构：如果data是完整的分析数据对象（包含stockData），则使用data.stockData
+        // 如果data已经是stockData本身（实时分析时的情况），则直接使用
         if (data.stockData && typeof data.stockData === 'object') {
-            console.log('检测到包含stockData的对象');
-            stockData = data.stockData;
+            console.log('检测到包含stockData的完整分析对象');
+            processedData = data.stockData;
+        } else {
+            console.log('使用直接传递的stockData对象');
+            processedData = data;
         }
         
         // 提取新增的数据
-        if (stockData['板块信息']) {
-            sectorData = stockData['板块信息'];
+        if (processedData['板块信息']) {
+            sectorData = processedData['板块信息'];
         }
-        if (stockData['资金流向']) {
-            moneyFlowData = stockData['资金流向'];
+        if (processedData['资金流向']) {
+            moneyFlowData = processedData['资金流向'];
         }
-        if (stockData['技术指标']) {
-            technicalIndicators = stockData['技术指标'];
+        if (processedData['技术指标']) {
+            technicalIndicators = processedData['技术指标'];
         }
         
         let html = '';
@@ -2436,13 +2441,13 @@
             <div class="market-grid">`;
         
         // 过滤掉板块信息、资金流向、技术指标这些对象类型的键
-        const basicKeys = Object.keys(stockData).filter(k => 
-            typeof stockData[k] !== null && typeof stockData[k] !== undefined && 
-            !['板块信息', '资金流向', '技术指标'].includes(k)
+        const basicKeys = Object.keys(processedData).filter(k => 
+            typeof processedData[k] !== null && typeof processedData[k] !== undefined && 
+            ![ '板块信息', '资金流向', '技术指标' ].includes(k)
         );
         
         basicKeys.forEach(k => {
-            const val = stockData[k];
+            const val = processedData[k];
             if (typeof val === 'object') return; // 跳过对象类型
             let colorClass = '';
             if (k.includes('涨跌幅') || k.includes('涨跌') || k.includes('涨幅')) {
