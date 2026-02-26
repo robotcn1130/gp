@@ -259,6 +259,8 @@ $cost   = $_POST['cost'] ?? 0;
 $cash   = $_POST['cash'] ?? 0;
 $reviewData = $_POST['reviewData'] ?? null;
 $fullContent = isset($_POST['fullContent']) ? true : false;
+$strategies = $_POST['strategies'] ?? '[]';
+$selectedStrategies = json_decode($strategies, true) ?? [];
 
 // 解析复盘数据
 $parsedReviewData = [];
@@ -755,6 +757,12 @@ function calculateTechnicalIndicators($klineData, $currentPrice) {
         }
     }
     
+    // MACD指标
+    $macd = calculateMACD($closes);
+    $indicators['MACD_DIF'] = $macd['DIF'];
+    $indicators['MACD_DEA'] = $macd['DEA'];
+    $indicators['MACD柱'] = $macd['MACD'];
+    
     return $indicators;
 }
 
@@ -841,7 +849,9 @@ function calculateKDJ($highs, $lows, $closes, $n = 9, $m1 = 3, $m2 = 3) {
  */
 function calculateBollingerBands($data, $period = 20, $stdDev = 2) {
     $n = count($data);
-    if ($n < $period) return ['upper' => null, 'middle' => null, 'lower' => null];
+    if ($n < $period) return ['upper' => null, 'middle' => null, 'lower' => null, 'history' => []];
+    
+    // 计算最新值
     $slicedData = array_slice($data, -$period);
     $middle = array_sum($slicedData) / $period;
     $variance = 0;
@@ -849,10 +859,90 @@ function calculateBollingerBands($data, $period = 20, $stdDev = 2) {
         $variance += pow($val - $middle, 2);
     }
     $std = sqrt($variance / $period);
+    
+    // 计算历史数据
+    $history = [];
+    for ($i = $period - 1; $i < $n; $i++) {
+        $window = array_slice($data, $i - $period + 1, $period);
+        $mid = array_sum($window) / $period;
+        $var = 0;
+        foreach ($window as $val) {
+            $var += pow($val - $mid, 2);
+        }
+        $s = sqrt($var / $period);
+        $history[] = [
+            'upper' => round($mid + $stdDev * $s, 4),
+            'middle' => round($mid, 4),
+            'lower' => round($mid - $stdDev * $s, 4)
+        ];
+    }
+    
     return [
         'upper' => round($middle + $stdDev * $std, 4),
         'middle' => round($middle, 4),
-        'lower' => round($middle - $stdDev * $std, 4)
+        'lower' => round($middle - $stdDev * $std, 4),
+        'history' => $history
+    ];
+}
+
+/**
+ * 计算MACD指标
+ */
+function calculateMACD($data, $fastPeriod = 12, $slowPeriod = 26, $signalPeriod = 9) {
+    $n = count($data);
+    if ($n < $slowPeriod + $signalPeriod) return ['DIF' => null, 'DEA' => null, 'MACD' => null, 'history' => []];
+    
+    // 计算12日EMA和26日EMA
+    $emaFast = calculateEMA($data, $fastPeriod);
+    $emaSlow = calculateEMA($data, $slowPeriod);
+    
+    // 计算DIF
+    $dif = $emaFast - $emaSlow;
+    
+    // 计算DEA (DIF的9日EMA)
+    // 为了计算DIF的EMA，需要先计算历史DIF值
+    $difHistory = [];
+    for ($i = $slowPeriod - 1; $i < $n; $i++) {
+        $currentFast = calculateEMA(array_slice($data, 0, $i + 1), $fastPeriod);
+        $currentSlow = calculateEMA(array_slice($data, 0, $i + 1), $slowPeriod);
+        $difHistory[] = $currentFast - $currentSlow;
+    }
+    
+    $dea = calculateEMA($difHistory, $signalPeriod);
+    
+    // 计算MACD柱
+    $macd = ($dif - $dea) * 2;
+    
+    // 计算历史MACD数据
+    $history = [];
+    $minLength = max($slowPeriod + $signalPeriod - 1, $n - 60); // 最多保存60个数据点
+    for ($i = $minLength; $i < $n; $i++) {
+        $currentFast = calculateEMA(array_slice($data, 0, $i + 1), $fastPeriod);
+        $currentSlow = calculateEMA(array_slice($data, 0, $i + 1), $slowPeriod);
+        $currentDif = $currentFast - $currentSlow;
+        
+        $currentDifHistory = [];
+        for ($j = $slowPeriod - 1; $j <= $i; $j++) {
+            $histFast = calculateEMA(array_slice($data, 0, $j + 1), $fastPeriod);
+            $histSlow = calculateEMA(array_slice($data, 0, $j + 1), $slowPeriod);
+            $currentDifHistory[] = $histFast - $histSlow;
+        }
+        
+        $currentDea = calculateEMA($currentDifHistory, $signalPeriod);
+        $currentMacd = ($currentDif - $currentDea) * 2;
+        
+        $history[] = [
+            'DIF' => round($currentDif, 4),
+            'DEA' => round($currentDea, 4),
+            'MACD' => round($currentMacd, 4)
+        ];
+    }
+    
+    return [
+        'DIF' => round($dif, 4),
+        'DEA' => round($dea, 4),
+        'MACD' => round($macd, 4),
+        'history' => $history
     ];
 }
 
@@ -1166,14 +1256,8 @@ foreach ($stockNews as $newsItem) {
 // 处理用户持仓信息
 if (empty($shares) || empty($cost)) {
     $userPrompt .= "\n用户持仓：暂无持仓信息，为空仓用户提供分析。剩余资金 {$cash} 元。\n\n";
-    // 明确计算20%的资金量，确保AI正确理解
-    $twentyPercent = $cash * 0.2;
-    $userPrompt .= "提示：剩余资金的20%为 {$twentyPercent} 元，请在投资建议中使用正确的计算结果。\n\n";
 } else {
     $userPrompt .= "\n用户持仓：数 {$shares} 股/份，成本 {$cost} 元，剩余资金 {$cash} 元。\n\n";
-    // 明确计算20%的资金量，确保AI正确理解
-    $twentyPercent = $cash * 0.2;
-    $userPrompt .= "提示：剩余资金的20%为 {$twentyPercent} 元，请在投资建议中使用正确的计算结果。\n\n";
 }
 
 // 处理复盘数据
@@ -1199,6 +1283,19 @@ $userPrompt .= "6. 在分析过程中综合考虑大盘走势、板块表现、�
 $userPrompt .= "7. 提供清晰的结论和投资建议，包括操作方向、仓位建议、价格区间、目标价/止损价等\n";
 $userPrompt .= "8. 如果是ETF基金，请分析其跟踪标的的市场表现\n";
 $userPrompt .= "9. 重要：所有数据中出现的\"-\"符号表示该数据未能成功获取，请在分析时完全忽略这些数据，不要提及或试图解释\"-\"的含义\n";
+
+// 如果有选择战法，添加战法分析要求
+if (!empty($selectedStrategies)) {
+    $userPrompt .= "10. 请针对以下选定的战法进行单独分析，每个战法分析一个板块：\n";
+    foreach ($selectedStrategies as $index => $strategy) {
+        $userPrompt .= ($index + 1) . ". {$strategy}\n";
+    }
+    $userPrompt .= "请为每个选定的战法创建一个独立的分析板块，包括：\n";
+    $userPrompt .= "- 战法适用性评估\n";
+    $userPrompt .= "- 当前行情下的战法信号\n";
+    $userPrompt .= "- 基于该战法的具体操作建议\n";
+    $userPrompt .= "- 风险提示\n";
+}
 
 // 如果有复盘数据，添加复盘分析要求
 if (!empty($parsedReviewData)) {
