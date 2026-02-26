@@ -1153,6 +1153,8 @@
         'EMA5': 'EMA5（5日指数移动平均线）：最近5个交易日收盘价的加权平均值，侧重近期价格，比简单均线更敏感，用于判断短期趋势。',
         'EMA10': 'EMA10（10日指数移动平均线）：最近10个交易日收盘价的加权平均值，用于判断中短期趋势。',
         'EMA20': 'EMA20（20日指数移动平均线）：最近20个交易日收盘价的加权平均值，常用于判断中期趋势和作为布林带的中轨。',
+        'EMA30': 'EMA30（30日指数移动平均线）：最近30个交易日收盘价的加权平均值，用于判断中长期趋势。',
+        'EMA60': 'EMA60（60日指数移动平均线）：最近60个交易日收盘价的加权平均值，用于判断长期趋势，被视为重要的牛熊分界线。',
         'RSI14': 'RSI14（14日相对强弱指标）：取值0-100。RSI>70表示超买，可能回调；RSI<30表示超卖，可能反弹；50左右为中性。',
         'K': 'KDJ-K值：KDJ指标的快速线，反映当前价格在近期高低点的位置，变化较快。',
         'D': 'KDJ-D值：KDJ指标的慢速线，是K值的平滑，变化较慢，用于确认信号。',
@@ -1165,7 +1167,8 @@
         '布林带上轨': '布林带上轨：布林带通道的上边界，通常为中轨+2倍标准差，价格触及上轨可能受压回落。',
         '布林带中轨': '布林带中轨：通常为20日移动平均线，代表中期趋势方向。',
         '布林带下轨': '布林带下轨：布林带通道的下边界，通常为中轨-2倍标准差，价格触及下轨可能获得支撑反弹。',
-        '价格位置': '价格位置：当前价格在布林带上下轨之间的百分比位置，0%在下轨，100%在上轨，50%在中轨。'
+        '价格位置': '价格位置：当前价格在布林带上下轨之间的百分比位置，0%在下轨，100%在上轨，50%在中轨。',
+        'CCI': 'CCI（顺势指标）：衡量价格偏离其平均水平的程度，正常值范围为-100到100。CCI>100表示超买，可能回调；CCI<-100表示超卖，可能反弹；-100到100之间为正常区间。'
     };
     
     // 格式化资金流向数据（单位：万元）
@@ -2713,6 +2716,11 @@
             }
             
             Object.keys(technicalIndicators).forEach(k => {
+                // 跳过历史数据字段和K线日期，只显示最新值
+                if (k === 'CCI历史' || k === 'MACD历史' || k === '布林带历史' || k === 'K线日期') {
+                    return;
+                }
+                
                 const val = technicalIndicators[k];
                 let displayVal = val !== null && val !== undefined ? val : '-';
                 let status = '-';
@@ -2754,6 +2762,21 @@
                     }
                 }
                 
+                // CCI超买超卖提示
+                if (k === 'CCI' && !isNaN(parseFloat(val))) {
+                    const cciVal = parseFloat(val);
+                    if (cciVal > 100) {
+                        status = '超买';
+                        statusClass = 'text-red-500';
+                    } else if (cciVal < -100) {
+                        status = '超卖';
+                        statusClass = 'text-green-500';
+                    } else {
+                        status = '正常';
+                        statusClass = 'text-gray-400';
+                    }
+                }
+                
                 html += `
                     <tr class="border-b border-border-color hover:bg-hover-bg">
                         <td class="p-2 font-medium">${k}</td>
@@ -2783,6 +2806,10 @@
                     <div class="card p-4">
                         <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">布林带</h5>
                         <canvas id="bollingerChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="card p-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">CCI走势</h5>
+                        <canvas id="cciChart" style="max-height: 300px;"></canvas>
                     </div>
                 </div></div>`;
         }
@@ -2998,13 +3025,15 @@
                     const ctxEma = emaCanvas.getContext('2d');
                     
                     const emaData = {
-                        labels: ['EMA5', 'EMA10', 'EMA20'],
+                        labels: ['EMA5', 'EMA10', 'EMA20', 'EMA30', 'EMA60'],
                         datasets: [{
                             label: '均线值',
                             data: [
                                 parseFloat(technicalIndicators['EMA5']) || 0,
                                 parseFloat(technicalIndicators['EMA10']) || 0,
-                                parseFloat(technicalIndicators['EMA20']) || 0
+                                parseFloat(technicalIndicators['EMA20']) || 0,
+                                parseFloat(technicalIndicators['EMA30']) || 0,
+                                parseFloat(technicalIndicators['EMA60']) || 0
                             ],
                             borderColor: 'rgba(59, 130, 246, 1)',
                             backgroundColor: 'rgba(59, 130, 246, 0.2)',
@@ -3150,17 +3179,66 @@
                     const macdDif = parseFloat(technicalIndicators['MACD_DIF']) || 0;
                     const macdDea = parseFloat(technicalIndicators['MACD_DEA']) || 0;
                     const macdBar = parseFloat(technicalIndicators['MACD柱']) || 0;
+                    const macdHistory = technicalIndicators['MACD历史'] || [];
+                    const klineDates = technicalIndicators['K线日期'] || [];
                     
-                    // 生成日期标签
-                    const dateLabels = generateDateLabels(30);
+                    // 准备MACD数据
+                    let difData = [];
+                    let deaData = [];
+                    let macdBarData = [];
+                    let macdBarColors = [];
+                    let dateLabels = [];
                     
-                    // 创建MACD数据结构（使用模拟历史数据）
+                    if (macdHistory.length > 0) {
+                        // 使用真实历史数据
+                        macdHistory.forEach((item, index) => {
+                            difData.push(item.DIF);
+                            deaData.push(item.DEA);
+                            macdBarData.push(item.MACD);
+                            macdBarColors.push(item.MACD >= 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)');
+                            
+                            // 使用K线数据中的实际日期
+                            if (klineDates.length > 0) {
+                                // 计算对应的K线日期索引
+                                const klineIndex = klineDates.length - macdHistory.length + index;
+                                if (klineIndex >= 0 && klineIndex < klineDates.length) {
+                                    const dateStr = klineDates[klineIndex];
+                                    // 转换日期格式为 MM/DD
+                                    const parts = dateStr.split('-');
+                                    if (parts.length === 3) {
+                                        dateLabels.push(parts[1] + '/' + parts[2]);
+                                    } else {
+                                        dateLabels.push(dateStr);
+                                    }
+                                } else {
+                                    //  fallback到生成的日期
+                                    const date = new Date();
+                                    date.setDate(date.getDate() - (macdHistory.length - 1 - index));
+                                    dateLabels.push((date.getMonth() + 1) + '/' + date.getDate());
+                                }
+                            } else {
+                                //  fallback到生成的日期
+                                const date = new Date();
+                                date.setDate(date.getDate() - (macdHistory.length - 1 - index));
+                                dateLabels.push((date.getMonth() + 1) + '/' + date.getDate());
+                            }
+                        });
+                    } else {
+                        //  fallback到模拟数据
+                        dateLabels = generateDateLabels(30);
+                        difData = Array(30).fill(0).map((_, i) => macdDif * (0.8 + Math.random() * 0.4));
+                        deaData = Array(30).fill(0).map((_, i) => macdDea * (0.8 + Math.random() * 0.4));
+                        macdBarData = Array(30).fill(0).map((_, i) => macdBar * (0.8 + Math.random() * 0.4));
+                        macdBarColors = Array(30).fill(0).map((_, i) => (macdBar * (0.8 + Math.random() * 0.4)) >= 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)');
+                    }
+                    
+                    // 创建MACD数据结构
                     const macdData = {
                         labels: dateLabels,
                         datasets: [
                             {
                                 label: 'DIF',
-                                data: Array(30).fill(0).map((_, i) => macdDif * (0.8 + Math.random() * 0.4)),
+                                data: difData,
                                 borderColor: 'rgba(239, 68, 68, 1)',
                                 backgroundColor: 'rgba(239, 68, 68, 0.1)',
                                 borderWidth: 2,
@@ -3169,7 +3247,7 @@
                             },
                             {
                                 label: 'DEA',
-                                data: Array(30).fill(0).map((_, i) => macdDea * (0.8 + Math.random() * 0.4)),
+                                data: deaData,
                                 borderColor: 'rgba(59, 130, 246, 1)',
                                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                 borderWidth: 2,
@@ -3178,10 +3256,10 @@
                             },
                             {
                                 label: 'MACD柱',
-                                data: Array(30).fill(0).map((_, i) => macdBar * (0.8 + Math.random() * 0.4)),
+                                data: macdBarData,
                                 type: 'bar',
-                                backgroundColor: Array(30).fill(0).map((_, i) => (macdBar * (0.8 + Math.random() * 0.4)) >= 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)'),
-                                borderColor: Array(30).fill(0).map((_, i) => (macdBar * (0.8 + Math.random() * 0.4)) >= 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)'),
+                                backgroundColor: macdBarColors,
+                                borderColor: macdBarColors.map(color => color.replace('0.8', '1')),
                                 borderWidth: 1,
                                 fill: true
                             }
@@ -3267,12 +3345,31 @@
                     const middleBand = parseFloat(technicalIndicators['布林带中轨']) || 0;
                     const lowerBand = parseFloat(technicalIndicators['布林带下轨']) || 0;
                     const pricePosition = parseFloat(technicalIndicators['价格位置']) || 0;
+                    const klineDates = technicalIndicators['K线日期'] || [];
                     
                     // 计算当前价格（根据价格位置在上中下轨之间的位置）
                     const currentPrice = lowerBand + (upperBand - lowerBand) * (pricePosition / 100);
                     
                     // 生成日期标签
-                    const dateLabels = generateDateLabels(30);
+                    let dateLabels = [];
+                    const days = Math.min(30, klineDates.length);
+                    
+                    if (klineDates.length > 0) {
+                        // 使用K线数据中的实际日期
+                        const recentDates = klineDates.slice(-days);
+                        recentDates.forEach(dateStr => {
+                            // 转换日期格式为 MM/DD
+                            const parts = dateStr.split('-');
+                            if (parts.length === 3) {
+                                dateLabels.push(parts[1] + '/' + parts[2]);
+                            } else {
+                                dateLabels.push(dateStr);
+                            }
+                        });
+                    } else {
+                        //  fallback到生成的日期
+                        dateLabels = generateDateLabels(30);
+                    }
                     
                     // 创建布林带数据结构（使用模拟历史数据）
                     const bollingerData = {
@@ -3280,7 +3377,7 @@
                         datasets: [
                             {
                                 label: '上轨',
-                                data: Array(30).fill(0).map((_, i) => upperBand * (0.95 + Math.random() * 0.1)),
+                                data: Array(dateLabels.length).fill(0).map((_, i) => upperBand * (0.95 + Math.random() * 0.1)),
                                 borderColor: 'rgba(245, 158, 11, 1)',
                                 backgroundColor: 'rgba(245, 158, 11, 0.1)',
                                 borderWidth: 2,
@@ -3289,7 +3386,7 @@
                             },
                             {
                                 label: '中轨',
-                                data: Array(30).fill(0).map((_, i) => middleBand * (0.95 + Math.random() * 0.1)),
+                                data: Array(dateLabels.length).fill(0).map((_, i) => middleBand * (0.95 + Math.random() * 0.1)),
                                 borderColor: 'rgba(59, 130, 246, 1)',
                                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                 borderWidth: 2,
@@ -3298,7 +3395,7 @@
                             },
                             {
                                 label: '下轨',
-                                data: Array(30).fill(0).map((_, i) => lowerBand * (0.95 + Math.random() * 0.1)),
+                                data: Array(dateLabels.length).fill(0).map((_, i) => lowerBand * (0.95 + Math.random() * 0.1)),
                                 borderColor: 'rgba(16, 185, 129, 1)',
                                 backgroundColor: 'rgba(16, 185, 129, 0.1)',
                                 borderWidth: 2,
@@ -3307,7 +3404,7 @@
                             },
                             {
                                 label: '价格位置',
-                                data: [null, ...Array(28).fill(null), currentPrice],
+                                data: Array(dateLabels.length - 1).fill(null).concat([currentPrice]),
                                 borderColor: 'rgba(239, 68, 68, 1)',
                                 backgroundColor: 'rgba(239, 68, 68, 0.2)',
                                 borderWidth: 0,
@@ -3384,6 +3481,124 @@
                         console.log('布林带图表绘制成功');
                     } catch (error) {
                         console.error('绘制布林带图表失败:', error);
+                    }
+                }
+                
+                // 图表5：CCI走势
+                const cciCanvas = document.getElementById('cciChart');
+                if (cciCanvas) {
+                    console.log('准备绘制CCI走势图表...');
+                    const ctxCci = cciCanvas.getContext('2d');
+                    
+                    // 获取CCI数据
+                    const cciValue = parseFloat(technicalIndicators['CCI']) || 0;
+                    const cciHistory = technicalIndicators['CCI历史'] || [];
+                    const klineDates = technicalIndicators['K线日期'] || [];
+                    
+                    // 生成日期标签
+                    let dateLabels = [];
+                    const days = Math.min(30, cciHistory.length > 0 ? cciHistory.length : klineDates.length);
+                    
+                    if (klineDates.length > 0) {
+                        // 使用K线数据中的实际日期
+                        const recentDates = klineDates.slice(-days);
+                        recentDates.forEach(dateStr => {
+                            // 转换日期格式为 MM/DD
+                            const parts = dateStr.split('-');
+                            if (parts.length === 3) {
+                                dateLabels.push(parts[1] + '/' + parts[2]);
+                            } else {
+                                dateLabels.push(dateStr);
+                            }
+                        });
+                    } else {
+                        //  fallback到生成的日期
+                        dateLabels = generateDateLabels(30);
+                    }
+                    
+                    // 创建CCI数据结构
+                    const cciData = {
+                        labels: dateLabels,
+                        datasets: [
+                            {
+                                label: 'CCI',
+                                data: cciHistory.length > 0 ? cciHistory.slice(-dateLabels.length) : Array(dateLabels.length).fill(0).map((_, i) => cciValue * (0.8 + Math.random() * 0.4)),
+                                borderColor: 'rgba(245, 158, 11, 1)',
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                pointRadius: 2
+                            }
+                        ]
+                    };
+                    
+                    // 销毁旧图表
+                    if (window.chartInstances.cciChartInstance) {
+                        window.chartInstances.cciChartInstance.destroy();
+                    }
+                    
+                    // 创建新图表
+                    try {
+                        window.chartInstances.cciChartInstance = new Chart(ctxCci, {
+                            type: 'line',
+                            data: cciData,
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        display: true,
+                                        position: 'top',
+                                        labels: {
+                                            color: textColor,
+                                            font: {
+                                                size: 12
+                                            }
+                                        }
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) {
+                                                    label += ': ';
+                                                }
+                                                if (context.parsed.y !== null) {
+                                                    label += context.parsed.y.toFixed(2);
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        display: true,
+                                        grid: {
+                                            display: true,
+                                            color: gridColor
+                                        },
+                                        ticks: {
+                                            color: textColor,
+                                            font: {
+                                                size: 10
+                                            },
+                                            maxRotation: 45,
+                                            minRotation: 45
+                                        }
+                                    },
+                                    y: {
+                                        ticks: { color: textColor },
+                                        grid: { color: gridColor },
+                                        suggestedMin: -200,
+                                        suggestedMax: 200
+                                    }
+                                }
+                            }
+                        });
+                        console.log('CCI走势图表绘制成功');
+                    } catch (error) {
+                        console.error('绘制CCI走势图表失败:', error);
                     }
                 }
             } else {
