@@ -727,12 +727,18 @@ function calculateTechnicalIndicators($klineData, $currentPrice) {
     $closes = array_column($klineData, 'close');
     $highs = array_column($klineData, 'high');
     $lows = array_column($klineData, 'low');
+    $dates = array_column($klineData, 'date');
     $n = count($closes);
     
-    // EMA5, EMA10, EMA20
+    // 保存K线日期
+    $indicators['K线日期'] = $dates;
+    
+    // EMA5, EMA10, EMA20, EMA30, EMA60
     $indicators['EMA5'] = calculateEMA($closes, 5);
     $indicators['EMA10'] = calculateEMA($closes, 10);
     $indicators['EMA20'] = calculateEMA($closes, 20);
+    $indicators['EMA30'] = calculateEMA($closes, 30);
+    $indicators['EMA60'] = calculateEMA($closes, 60);
     
     // RSI14
     $indicators['RSI14'] = calculateRSI($closes, 14);
@@ -762,6 +768,12 @@ function calculateTechnicalIndicators($klineData, $currentPrice) {
     $indicators['MACD_DIF'] = $macd['DIF'];
     $indicators['MACD_DEA'] = $macd['DEA'];
     $indicators['MACD柱'] = $macd['MACD'];
+    $indicators['MACD历史'] = $macd['history'];
+    
+    // CCI指标
+    $cci = calculateCCI($highs, $lows, $closes, 14);
+    $indicators['CCI'] = $cci['value'];
+    $indicators['CCI历史'] = $cci['history'];
     
     return $indicators;
 }
@@ -892,56 +904,111 @@ function calculateMACD($data, $fastPeriod = 12, $slowPeriod = 26, $signalPeriod 
     $n = count($data);
     if ($n < $slowPeriod + $signalPeriod) return ['DIF' => null, 'DEA' => null, 'MACD' => null, 'history' => []];
     
-    // 计算12日EMA和26日EMA
-    $emaFast = calculateEMA($data, $fastPeriod);
-    $emaSlow = calculateEMA($data, $slowPeriod);
-    
-    // 计算DIF
-    $dif = $emaFast - $emaSlow;
-    
-    // 计算DEA (DIF的9日EMA)
-    // 为了计算DIF的EMA，需要先计算历史DIF值
-    $difHistory = [];
-    for ($i = $slowPeriod - 1; $i < $n; $i++) {
-        $currentFast = calculateEMA(array_slice($data, 0, $i + 1), $fastPeriod);
-        $currentSlow = calculateEMA(array_slice($data, 0, $i + 1), $slowPeriod);
-        $difHistory[] = $currentFast - $currentSlow;
+    // 计算EMA的辅助函数（使用递推方法）
+    function calculateEMASequential($data, $period) {
+        $result = [];
+        $n = count($data);
+        if ($n < $period) return $result;
+        
+        $multiplier = 2 / ($period + 1);
+        // 第一个EMA值使用简单平均值
+        $ema = array_sum(array_slice($data, 0, $period)) / $period;
+        $result[] = $ema;
+        
+        // 递推计算后续EMA值
+        for ($i = $period; $i < $n; $i++) {
+            $ema = ($data[$i] - $ema) * $multiplier + $ema;
+            $result[] = $ema;
+        }
+        return $result;
     }
     
-    $dea = calculateEMA($difHistory, $signalPeriod);
+    // 计算12日EMA和26日EMA
+    $ema12 = calculateEMASequential($data, $fastPeriod);
+    $ema26 = calculateEMASequential($data, $slowPeriod);
+    
+    // 计算DIF (EMA12 - EMA26)
+    $dif = [];
+    $difStart = $slowPeriod - $fastPeriod; // EMA26比EMA12晚开始的天数
+    for ($i = 0; $i < count($ema26); $i++) {
+        $dif[] = $ema12[$i + $difStart] - $ema26[$i];
+    }
+    
+    // 计算DEA (DIF的9日EMA)
+    $dea = calculateEMASequential($dif, $signalPeriod);
     
     // 计算MACD柱
-    $macd = ($dif - $dea) * 2;
+    $macd = [];
+    $macdStart = $signalPeriod - 1;
+    for ($i = 0; $i < count($dea); $i++) {
+        $macd[] = ($dif[$i + $macdStart] - $dea[$i]) * 2;
+    }
     
     // 计算历史MACD数据
     $history = [];
-    $minLength = max($slowPeriod + $signalPeriod - 1, $n - 60); // 最多保存60个数据点
-    for ($i = $minLength; $i < $n; $i++) {
-        $currentFast = calculateEMA(array_slice($data, 0, $i + 1), $fastPeriod);
-        $currentSlow = calculateEMA(array_slice($data, 0, $i + 1), $slowPeriod);
-        $currentDif = $currentFast - $currentSlow;
-        
-        $currentDifHistory = [];
-        for ($j = $slowPeriod - 1; $j <= $i; $j++) {
-            $histFast = calculateEMA(array_slice($data, 0, $j + 1), $fastPeriod);
-            $histSlow = calculateEMA(array_slice($data, 0, $j + 1), $slowPeriod);
-            $currentDifHistory[] = $histFast - $histSlow;
-        }
-        
-        $currentDea = calculateEMA($currentDifHistory, $signalPeriod);
-        $currentMacd = ($currentDif - $currentDea) * 2;
-        
+    $totalData = count($macd);
+    $startIndex = max(0, $totalData - 60); // 最多保存60个数据点
+    
+    for ($i = $startIndex; $i < $totalData; $i++) {
         $history[] = [
-            'DIF' => round($currentDif, 4),
-            'DEA' => round($currentDea, 4),
-            'MACD' => round($currentMacd, 4)
+            'DIF' => round($dif[$i + $macdStart], 4),
+            'DEA' => round($dea[$i], 4),
+            'MACD' => round($macd[$i], 4)
         ];
     }
     
+    // 返回最新值
+    $latestIndex = count($macd) - 1;
     return [
-        'DIF' => round($dif, 4),
-        'DEA' => round($dea, 4),
-        'MACD' => round($macd, 4),
+        'DIF' => round($dif[$latestIndex + $macdStart], 4),
+        'DEA' => round($dea[$latestIndex], 4),
+        'MACD' => round($macd[$latestIndex], 4),
+        'history' => $history
+    ];
+}
+
+/**
+ * 计算CCI指标
+ */
+function calculateCCI($highs, $lows, $closes, $period = 14) {
+    $n = count($closes);
+    if ($n < $period) return ['value' => null, 'history' => []];
+    
+    $tp = []; // 典型价格
+    for ($i = 0; $i < $n; $i++) {
+        $tp[] = ($highs[$i] + $lows[$i] + $closes[$i]) / 3;
+    }
+    
+    // 计算历史CCI数据
+    $history = [];
+    for ($i = $period - 1; $i < $n; $i++) {
+        // 计算SMA(TP, period)
+        $windowTp = array_slice($tp, $i - $period + 1, $period);
+        $sma = array_sum($windowTp) / $period;
+        
+        // 计算平均绝对偏差(MAD)
+        $mad = 0;
+        foreach ($windowTp as $val) {
+            $mad += abs($val - $sma);
+        }
+        $mad /= $period;
+        
+        // 计算CCI
+        $cci = ($tp[$i] - $sma) / (0.015 * $mad);
+        $history[] = round($cci, 2);
+    }
+    
+    // 计算最新CCI值
+    $latestSma = array_sum(array_slice($tp, -$period)) / $period;
+    $latestMad = 0;
+    for ($i = $n - $period; $i < $n; $i++) {
+        $latestMad += abs($tp[$i] - $latestSma);
+    }
+    $latestMad /= $period;
+    $latestCci = ($tp[$n - 1] - $latestSma) / (0.015 * $latestMad);
+    
+    return [
+        'value' => round($latestCci, 2),
         'history' => $history
     ];
 }
@@ -1283,6 +1350,10 @@ $userPrompt .= "6. 在分析过程中综合考虑大盘走势、板块表现、�
 $userPrompt .= "7. 提供清晰的结论和投资建议，包括操作方向、仓位建议、价格区间、目标价/止损价等\n";
 $userPrompt .= "8. 如果是ETF基金，请分析其跟踪标的的市场表现\n";
 $userPrompt .= "9. 重要：所有数据中出现的\"-\"符号表示该数据未能成功获取，请在分析时完全忽略这些数据，不要提及或试图解释\"-\"的含义\n";
+$userPrompt .= "10. 请为当前股票打分，评分范围为-100到+100，+100表示极度看好，-100表示极度看空\n";
+$userPrompt .= "11. 请给出一段简洁的评价，总结股票的当前状态和前景\n";
+$userPrompt .= "12. 如果股票今日跌停或涨停，请分析第二日连板的概率及原因\n";
+$userPrompt .= "13. 如果股票今日没有跌停或涨停，请给出第二日的涨跌预测\n";
 
 // 如果有选择战法，添加战法分析要求
 if (!empty($selectedStrategies)) {
