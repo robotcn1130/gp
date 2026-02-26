@@ -2533,6 +2533,14 @@
             // 直接从data中提取，用于历史记录查看
             technicalIndicators = data['技术指标'];
         }
+        // 提取港股信息
+        let hkData = null;
+        if (stockData['港股信息']) {
+            hkData = stockData['港股信息'];
+        } else if (data['hkData']) {
+            // 直接从data中提取，用于历史记录查看
+            hkData = data['hkData'];
+        }
         
         console.log('提取的数据:', { sectorData, moneyFlowData, technicalIndicators });
         
@@ -2543,10 +2551,10 @@
             <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 基础行情</h4>
             <div class="market-grid">`;
         
-        // 过滤掉板块信息、资金流向、技术指标这些对象类型的键
+        // 过滤掉板块信息、资金流向、技术指标、港股信息这些对象类型的键
         const basicKeys = Object.keys(stockData).filter(k => 
             typeof stockData[k] !== null && typeof stockData[k] !== undefined && 
-            !['板块信息', '资金流向', '技术指标'].includes(k)
+            !['板块信息', '资金流向', '技术指标', '港股信息'].includes(k)
         );
         
         basicKeys.forEach(k => {
@@ -2812,6 +2820,36 @@
                         <canvas id="cciChart" style="max-height: 300px;"></canvas>
                     </div>
                 </div></div>`;
+        }
+        
+        // 5. 港股信息
+        if (hkData && Object.keys(hkData).length > 0) {
+            html += `<div class="mb-6">
+                <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">🇭🇰 港股信息</h4>
+                <div class="market-grid">`;
+            
+            Object.keys(hkData).forEach(k => {
+                const val = hkData[k];
+                if (typeof val === 'object') return; // 跳过对象类型
+                let colorClass = '';
+                if (k.includes('涨跌幅') || k.includes('涨跌') || k.includes('涨幅')) {
+                    const numVal = parseFloat(val);
+                    if (numVal > 0) {
+                        colorClass = 'positive';
+                    } else if (numVal < 0) {
+                        colorClass = 'negative';
+                    }
+                }
+                
+                html += `
+                    <div class="market-item">
+                        <div class="market-label">${k}</div>
+                        <div class="market-value ${colorClass}">${val}</div>
+                    </div>
+                `;
+            });
+            
+            html += `</div></div>`;
         }
         
         console.log('生成的HTML:', html);
