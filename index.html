@@ -525,6 +525,81 @@
                     </div>
                 </div>
                 
+                <!-- 战法选择 -->
+                <div class="md:col-span-3">
+                    <label class="block text-xs text-gray-500 mb-2">战法选择（可多选）</label>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-3 bg-hover-bg rounded border border-border-color">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="5/20均线交叉 (金叉死叉)" class="w-4 h-4">
+                            <span>5/20均线交叉 (金叉死叉)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="10/30均线交叉 (双线波段)" class="w-4 h-4">
+                            <span>10/30均线交叉 (双线波段)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="20/60均线交叉 (长线趋势)" class="w-4 h-4">
+                            <span>20/60均线交叉 (长线趋势)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="MACD零轴战法 (过零轴)" class="w-4 h-4">
+                            <span>MACD零轴战法 (过零轴)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="MACD信号线 (红绿柱)" class="w-4 h-4">
+                            <span>MACD信号线 (红绿柱)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="RSI震荡战法 (60买40卖)" class="w-4 h-4">
+                            <span>RSI震荡战法 (60买40卖)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="KDJ极值反转 (J线探底)" class="w-4 h-4">
+                            <span>KDJ极值反转 (J线探底)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="布林带突破 (上下轨)" class="w-4 h-4">
+                            <span>布林带突破 (上下轨)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="布林带均值回归 (探底回升)" class="w-4 h-4">
+                            <span>布林带均值回归 (探底回升)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="CCI顺势指标 (+-100突破)" class="w-4 h-4">
+                            <span>CCI顺势指标 (+-100突破)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="天量突破 (2倍量上涨)" class="w-4 h-4">
+                            <span>天量突破 (2倍量上涨)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="唐奇安通道 (20周突破)" class="w-4 h-4">
+                            <span>唐奇安通道 (20周突破)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="上周高低点 (周K突破)" class="w-4 h-4">
+                            <span>上周高低点 (周K突破)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="三阳买两阴卖 (形态跟踪)" class="w-4 h-4">
+                            <span>三阳买两阴卖 (形态跟踪)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="半仓定投 (月投2万)" class="w-4 h-4">
+                            <span>半仓定投 (月投2万)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="半仓小网格 (5%间距)" class="w-4 h-4">
+                            <span>半仓小网格 (5%间距)</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-card-bg p-2 rounded transition-colors">
+                            <input type="checkbox" name="strategies[]" value="半仓大网格 (10%间距)" class="w-4 h-4">
+                            <span>半仓大网格 (10%间距)</span>
+                        </label>
+                    </div>
+                </div>
+                
                 <button type="submit" id="submitBtn" class="md:col-span-3 btn-primary text-white font-bold py-3 rounded mt-2 shadow-lg">开始实时数据分析</button>
             </form>
         </div>
@@ -1082,6 +1157,9 @@
         'K': 'KDJ-K值：KDJ指标的快速线，反映当前价格在近期高低点的位置，变化较快。',
         'D': 'KDJ-D值：KDJ指标的慢速线，是K值的平滑，变化较慢，用于确认信号。',
         'J': 'KDJ-J值：KDJ指标的超买超卖线，是3K-2D，最敏感，J>100超买，J<0超卖。',
+        'MACD_DIF': 'MACD-DIF（快线）：12日指数移动平均线与26日指数移动平均线的差值，反映短期与长期价格趋势的差异。',
+        'MACD_DEA': 'MACD-DEA（慢线）：DIF的9日指数移动平均线，用于平滑DIF曲线，确认趋势变化。',
+        'MACD柱': 'MACD柱：(DIF-DEA)*2，用于衡量DIF与DEA之间的距离，柱子颜色反映趋势方向，长度反映趋势强度。',
         '布林带': '布林带（布林线）：由三条线组成的通道指标，中轨通常为20日移动平均线，上下轨为中轨±2倍标准差。用于判断价格波动范围和支撑压力位，价格在通道内波动，突破上下轨可能预示趋势变化。',
         '布林线': '布林带（布林线）：由三条线组成的通道指标，中轨通常为20日移动平均线，上下轨为中轨±2倍标准差。用于判断价格波动范围和支撑压力位，价格在通道内波动，突破上下轨可能预示趋势变化。',
         '布林带上轨': '布林带上轨：布林带通道的上边界，通常为中轨+2倍标准差，价格触及上轨可能受压回落。',
@@ -1132,6 +1210,8 @@
             
             // 整合数据
             let enhancedMarketData = marketData || {};
+            console.log('原始marketData:', enhancedMarketData);
+            
             if (sectorData && Object.keys(sectorData).length > 0) {
                 enhancedMarketData['板块信息'] = sectorData;
             }
@@ -1141,6 +1221,8 @@
             if (technicalData && Object.keys(technicalData).length > 0) {
                 enhancedMarketData['技术指标'] = technicalData;
             }
+            
+            console.log('整合后的enhancedMarketData:', enhancedMarketData);
             
             // 显示市场数据
             if (Object.keys(enhancedMarketData).length > 0) {
@@ -2167,29 +2249,42 @@
         const formData = new FormData(form);
         
         // 收集表单数据
-        const symbol = formData.get('symbol');
-        const shares = formData.get('shares');
-        const cost = formData.get('cost');
-        const cash = formData.get('cash');
+    const symbol = formData.get('symbol');
+    const shares = formData.get('shares');
+    const cost = formData.get('cost');
+    const cash = formData.get('cash');
 
-        // 收集复盘数据
-        const reviewData = [];
-        const reviewRecords = document.querySelectorAll('.review-record');
-        reviewRecords.forEach((record, index) => {
-            const type = record.querySelector(`select[name^="review_type_"]`).value;
-            const price = record.querySelector(`input[name^="review_price_"]`).value;
-            const time = record.querySelector(`input[name^="review_time_"]`).value;
-            const remaining = record.querySelector(`input[name^="review_remaining_"]`).value;
-            
-            if (type && price && time) {
-                reviewData.push({
-                    type: type,
-                    price: price,
-                    time: time,
-                    remaining: remaining
-                });
-            }
-        });
+    // 收集选中的战法信息
+    const strategies = [];
+    document.querySelectorAll('input[name="strategies[]"]:checked').forEach(checkbox => {
+        strategies.push(checkbox.value);
+    });
+
+    // 收集复盘数据
+    const reviewData = [];
+    const reviewRecords = document.querySelectorAll('.review-record');
+    reviewRecords.forEach((record, index) => {
+        const type = record.querySelector(`select[name^="review_type_"]`).value;
+        const price = record.querySelector(`input[name^="review_price_"]`).value;
+        const time = record.querySelector(`input[name^="review_time_"]`).value;
+        const remaining = record.querySelector(`input[name^="review_remaining_"]`).value;
+        
+        if (type && price && time) {
+            reviewData.push({
+                type: type,
+                price: price,
+                time: time,
+                remaining: remaining
+            });
+        }
+    });
+
+    // 将战法信息添加到formData中
+    if (strategies.length > 0) {
+        formData.append('strategies', JSON.stringify(strategies));
+    } else {
+        formData.append('strategies', JSON.stringify([]));
+    }
 
         // 重置当前分析数据
         currentAnalysisData = {
@@ -2407,31 +2502,36 @@
         }
         
         // 检查是否包含stockData和indexData（可能是直接传递了整个数据对象）
-        let processedData = data;
+        let stockData = data;
         let sectorData = null;
         let moneyFlowData = null;
         let technicalIndicators = null;
         
-        // 检查数据结构：如果data是完整的分析数据对象（包含stockData），则使用data.stockData
-        // 如果data已经是stockData本身（实时分析时的情况），则直接使用
+        console.log('renderMarketTable数据:', data);
+        
         if (data.stockData && typeof data.stockData === 'object') {
-            console.log('检测到包含stockData的完整分析对象');
-            processedData = data.stockData;
-        } else {
-            console.log('使用直接传递的stockData对象');
-            processedData = data;
+            console.log('检测到包含stockData的对象');
+            stockData = data.stockData;
         }
         
         // 提取新增的数据
-        if (processedData['板块信息']) {
-            sectorData = processedData['板块信息'];
+        if (stockData['板块信息']) {
+            sectorData = stockData['板块信息'];
         }
-        if (processedData['资金流向']) {
-            moneyFlowData = processedData['资金流向'];
+        if (stockData['资金流向']) {
+            moneyFlowData = stockData['资金流向'];
+        } else if (data['资金流向']) {
+            // 直接从data中提取，用于历史记录查看
+            moneyFlowData = data['资金流向'];
         }
-        if (processedData['技术指标']) {
-            technicalIndicators = processedData['技术指标'];
+        if (stockData['技术指标']) {
+            technicalIndicators = stockData['技术指标'];
+        } else if (data['技术指标']) {
+            // 直接从data中提取，用于历史记录查看
+            technicalIndicators = data['技术指标'];
         }
+        
+        console.log('提取的数据:', { sectorData, moneyFlowData, technicalIndicators });
         
         let html = '';
         
@@ -2441,13 +2541,13 @@
             <div class="market-grid">`;
         
         // 过滤掉板块信息、资金流向、技术指标这些对象类型的键
-        const basicKeys = Object.keys(processedData).filter(k => 
-            typeof processedData[k] !== null && typeof processedData[k] !== undefined && 
-            ![ '板块信息', '资金流向', '技术指标' ].includes(k)
+        const basicKeys = Object.keys(stockData).filter(k => 
+            typeof stockData[k] !== null && typeof stockData[k] !== undefined && 
+            !['板块信息', '资金流向', '技术指标'].includes(k)
         );
         
         basicKeys.forEach(k => {
-            const val = processedData[k];
+            const val = stockData[k];
             if (typeof val === 'object') return; // 跳过对象类型
             let colorClass = '';
             if (k.includes('涨跌幅') || k.includes('涨跌') || k.includes('涨幅')) {
@@ -2677,6 +2777,10 @@
                         <canvas id="rsiKdjChart" style="max-height: 300px;"></canvas>
                     </div>
                     <div class="card p-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">MACD指标</h5>
+                        <canvas id="macdChart" style="max-height: 300px;"></canvas>
+                    </div>
+                    <div class="card p-4">
                         <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">布林带</h5>
                         <canvas id="bollingerChart" style="max-height: 300px;"></canvas>
                     </div>
@@ -2686,413 +2790,607 @@
         console.log('生成的HTML:', html);
         fullDataTable.innerHTML = html;
         
-        // 绘制资金流向图表
-        if (moneyFlowData && Object.keys(moneyFlowData).length > 0) {
-            const textColor = document.body.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#1f2328';
-            const gridColor = document.body.getAttribute('data-theme') === 'dark' ? '#30363d' : '#e5e7eb';
-            
-            // 图表1：资金净流入（横向柱状图）
-            const netCanvas = document.getElementById('moneyFlowNetChart');
-            if (netCanvas) {
-                const ctxNet = netCanvas.getContext('2d');
-                
-                const labels = ['超大单', '大单', '中单', '小单', '主力'];
-                const netInflowData = [];
-                const colors = [];
-                
-                labels.forEach(label => {
-                    const key = label + '净流入';
-                    const val = moneyFlowData[key];
-                    const numVal = parseFloat(val) || 0;
-                    netInflowData.push(numVal);
-                    
-                    // 红色表示净流入(正)，绿色表示净流出(负)
-                    if (numVal > 0) {
-                        colors.push('rgba(220, 38, 38, 0.9)');
-                    } else if (numVal < 0) {
-                        colors.push('rgba(34, 197, 94, 0.9)');
-                    } else {
-                        colors.push('rgba(156, 163, 175, 0.8)');
-                    }
-                });
-                
-                // 销毁旧图表
-                if (window.moneyFlowNetChartInstance) {
-                    window.moneyFlowNetChartInstance.destroy();
-                }
-                
-                window.moneyFlowNetChartInstance = new Chart(ctxNet, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: '净流入(万元)',
-                            data: netInflowData,
-                            backgroundColor: colors,
-                            borderColor: colors.map(c => c.replace('0.9', '1').replace('0.8', '1')),
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return '净流入: ' + formatMoneyFlow(context.parsed.x);
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                ticks: {
-                                    color: textColor,
-                                    callback: function(value) {
-                                        return value >= 10000 ? (value / 10000).toFixed(2) + '亿' : value + '万';
-                                    }
-                                },
-                                grid: { color: gridColor }
-                            },
-                            y: {
-                                ticks: { color: textColor },
-                                grid: { display: false }
-                            }
-                        }
-                    }
-                });
-            }
-            
-            // 图表2：资金流入流出对比
-            const compareCanvas = document.getElementById('moneyFlowCompareChart');
-            if (compareCanvas) {
-                const ctxCompare = compareCanvas.getContext('2d');
-                
-                const labels = ['超大单', '大单', '中单', '小单'];
-                const inflowData = [];
-                const outflowData = [];
-                
-                labels.forEach(label => {
-                    const inflowKey = label + '流入';
-                    const outflowKey = label + '流出';
-                    const inflowVal = moneyFlowData[inflowKey];
-                    const outflowVal = moneyFlowData[outflowKey];
-                    const inflowNum = parseFloat(inflowVal) || 0;
-                    const outflowNum = parseFloat(outflowVal) || 0;
-                    
-                    inflowData.push(inflowNum);
-                    outflowData.push(outflowNum);
-                });
-                
-                // 销毁旧图表
-                if (window.moneyFlowCompareChartInstance) {
-                    window.moneyFlowCompareChartInstance.destroy();
-                }
-                
-                window.moneyFlowCompareChartInstance = new Chart(ctxCompare, {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [
-                            {
-                                label: '流入',
-                                data: inflowData,
-                                backgroundColor: 'rgba(220, 38, 38, 0.9)',
-                                borderColor: 'rgb(220, 38, 38)',
-                                borderWidth: 1
-                            },
-                            {
-                                label: '流出',
-                                data: outflowData.map(v => -v),
-                                backgroundColor: 'rgba(34, 197, 94, 0.9)',
-                                borderColor: 'rgb(34, 197, 94)',
-                                borderWidth: 1
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top',
-                                labels: { color: textColor }
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const value = Math.abs(context.parsed.y);
-                                        return context.dataset.label + ': ' + formatMoneyFlow(value);
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                ticks: { color: textColor },
-                                grid: { display: false }
-                            },
-                            y: {
-                                ticks: {
-                                    color: textColor,
-                                    callback: function(value) {
-                                        const absVal = Math.abs(value);
-                                        return absVal >= 10000 ? (absVal / 10000).toFixed(2) + '亿' : absVal + '万';
-                                    }
-                                },
-                                grid: { color: gridColor }
-                            }
-                        }
-                    }
-                });
-            }
+        // 确保图表实例变量被正确初始化
+        if (typeof window.chartInstances === 'undefined') {
+            window.chartInstances = {};
         }
         
-        // 绘制技术指标图表
-        if (technicalIndicators && Object.keys(technicalIndicators).length > 0) {
-            const textColor = document.body.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#1f2328';
-            const gridColor = document.body.getAttribute('data-theme') === 'dark' ? '#30363d' : '#e5e7eb';
+        // 保存数据到变量，以便setTimeout回调使用
+        const chartMoneyFlowData = moneyFlowData;
+        const chartTechnicalIndicators = technicalIndicators;
+        
+        // 延迟执行图表绘制，确保DOM元素已经渲染完成
+        setTimeout(function(moneyFlowData, technicalIndicators) {
+            console.log('开始绘制图表...');
+            console.log('图表数据:', { moneyFlowData, technicalIndicators });
             
-            // 图表1：均线系统
-            const emaCanvas = document.getElementById('emaChart');
-            if (emaCanvas) {
-                const ctxEma = emaCanvas.getContext('2d');
+            // 绘制资金流向图表
+            if (moneyFlowData && Object.keys(moneyFlowData).length > 0) {
+                const textColor = document.body.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#1f2328';
+                const gridColor = document.body.getAttribute('data-theme') === 'dark' ? '#30363d' : '#e5e7eb';
                 
-                const emaData = {
-                    labels: ['EMA5', 'EMA10', 'EMA20'],
-                    datasets: [{
-                        label: '均线值',
-                        data: [
-                            parseFloat(technicalIndicators['EMA5']) || 0,
-                            parseFloat(technicalIndicators['EMA10']) || 0,
-                            parseFloat(technicalIndicators['EMA20']) || 0
-                        ],
-                        borderColor: 'rgba(59, 130, 246, 1)',
-                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                };
-                
-                if (window.emaChartInstance) {
-                    window.emaChartInstance.destroy();
-                }
-                
-                window.emaChartInstance = new Chart(ctxEma, {
-                    type: 'line',
-                    data: emaData,
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return context.parsed.y.toFixed(2);
+                // 图表1：资金净流入（横向柱状图）
+                const netCanvas = document.getElementById('moneyFlowNetChart');
+                if (netCanvas) {
+                    console.log('准备绘制资金净流入图表...');
+                    const ctxNet = netCanvas.getContext('2d');
+                    
+                    const labels = ['超大单', '大单', '中单', '小单', '主力'];
+                    const netInflowData = [];
+                    const colors = [];
+                    
+                    labels.forEach(label => {
+                        const key = label + '净流入';
+                        const val = moneyFlowData[key];
+                        const numVal = parseFloat(val) || 0;
+                        netInflowData.push(numVal);
+                        
+                        // 红色表示净流入(正)，绿色表示净流出(负)
+                        if (numVal > 0) {
+                            colors.push('rgba(220, 38, 38, 0.9)');
+                        } else if (numVal < 0) {
+                            colors.push('rgba(34, 197, 94, 0.9)');
+                        } else {
+                            colors.push('rgba(156, 163, 175, 0.8)');
+                        }
+                    });
+                    
+                    // 销毁旧图表
+                    if (window.chartInstances.moneyFlowNetChartInstance) {
+                        window.chartInstances.moneyFlowNetChartInstance.destroy();
+                    }
+                    
+                    // 创建新图表
+                    try {
+                        window.chartInstances.moneyFlowNetChartInstance = new Chart(ctxNet, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: '净流入(万元)',
+                                    data: netInflowData,
+                                    backgroundColor: colors,
+                                    borderColor: colors.map(c => c.replace('0.9', '1').replace('0.8', '1')),
+                                    borderWidth: 1
+                                }]
+                            },
+                            options: {
+                                indexAxis: 'y',
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                return '净流入: ' + formatMoneyFlow(context.parsed.x);
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        ticks: {
+                                            color: textColor,
+                                            callback: function(value) {
+                                                return value >= 10000 ? (value / 10000).toFixed(2) + '亿' : value + '万';
+                                            }
+                                        },
+                                        grid: { color: gridColor }
+                                    },
+                                    y: {
+                                        ticks: { color: textColor },
+                                        grid: { display: false }
                                     }
                                 }
                             }
-                        },
-                        scales: {
-                            x: {
-                                ticks: { color: textColor },
-                                grid: { color: gridColor }
-                            },
-                            y: {
-                                ticks: { color: textColor },
-                                grid: { color: gridColor }
-                            }
-                        }
+                        });
+                        console.log('资金净流入图表绘制成功');
+                    } catch (error) {
+                        console.error('绘制资金净流入图表失败:', error);
                     }
-                });
-            }
-            
-            // 图表2：RSI & KDJ
-            const rsiKdjCanvas = document.getElementById('rsiKdjChart');
-            if (rsiKdjCanvas) {
-                const ctxRsiKdj = rsiKdjCanvas.getContext('2d');
-                
-                const rsiKdjData = {
-                    labels: ['RSI14', 'K', 'D', 'J'],
-                    datasets: [{
-                        label: '数值',
-                        data: [
-                            parseFloat(technicalIndicators['RSI14']) || 0,
-                            parseFloat(technicalIndicators['K']) || 0,
-                            parseFloat(technicalIndicators['D']) || 0,
-                            parseFloat(technicalIndicators['J']) || 0
-                        ],
-                        backgroundColor: [
-                            'rgba(168, 85, 247, 0.8)',
-                            'rgba(249, 115, 22, 0.8)',
-                            'rgba(34, 197, 94, 0.8)',
-                            'rgba(236, 72, 153, 0.8)'
-                        ],
-                        borderColor: [
-                            'rgb(168, 85, 247)',
-                            'rgb(249, 115, 22)',
-                            'rgb(34, 197, 94)',
-                            'rgb(236, 72, 153)'
-                        ],
-                        borderWidth: 1
-                    }]
-                };
-                
-                if (window.rsiKdjChartInstance) {
-                    window.rsiKdjChartInstance.destroy();
                 }
                 
-                window.rsiKdjChartInstance = new Chart(ctxRsiKdj, {
-                    type: 'bar',
-                    data: rsiKdjData,
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return context.parsed.y.toFixed(2);
+                // 图表2：资金流入流出对比
+                const compareCanvas = document.getElementById('moneyFlowCompareChart');
+                if (compareCanvas) {
+                    console.log('准备绘制资金流入流出对比图表...');
+                    const ctxCompare = compareCanvas.getContext('2d');
+                    
+                    const labels = ['超大单', '大单', '中单', '小单'];
+                    const inflowData = [];
+                    const outflowData = [];
+                    
+                    labels.forEach(label => {
+                        const inflowKey = label + '流入';
+                        const outflowKey = label + '流出';
+                        const inflowVal = moneyFlowData[inflowKey];
+                        const outflowVal = moneyFlowData[outflowKey];
+                        const inflowNum = parseFloat(inflowVal) || 0;
+                        const outflowNum = parseFloat(outflowVal) || 0;
+                        
+                        inflowData.push(inflowNum);
+                        outflowData.push(outflowNum);
+                    });
+                    
+                    // 销毁旧图表
+                    if (window.chartInstances.moneyFlowCompareChartInstance) {
+                        window.chartInstances.moneyFlowCompareChartInstance.destroy();
+                    }
+                    
+                    // 创建新图表
+                    try {
+                        window.chartInstances.moneyFlowCompareChartInstance = new Chart(ctxCompare, {
+                            type: 'bar',
+                            data: {
+                                labels: labels,
+                                datasets: [
+                                    {
+                                        label: '流入',
+                                        data: inflowData,
+                                        backgroundColor: 'rgba(220, 38, 38, 0.9)',
+                                        borderColor: 'rgb(220, 38, 38)',
+                                        borderWidth: 1
+                                    },
+                                    {
+                                        label: '流出',
+                                        data: outflowData.map(v => -v),
+                                        backgroundColor: 'rgba(34, 197, 94, 0.9)',
+                                        borderColor: 'rgb(34, 197, 94)',
+                                        borderWidth: 1
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        display: true,
+                                        position: 'top',
+                                        labels: { color: textColor }
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                const value = Math.abs(context.parsed.y);
+                                                return context.dataset.label + ': ' + formatMoneyFlow(value);
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        ticks: { color: textColor },
+                                        grid: { display: false }
+                                    },
+                                    y: {
+                                        ticks: {
+                                            color: textColor,
+                                            callback: function(value) {
+                                                const absVal = Math.abs(value);
+                                                return absVal >= 10000 ? (absVal / 10000).toFixed(2) + '亿' : absVal + '万';
+                                            }
+                                        },
+                                        grid: { color: gridColor }
                                     }
                                 }
                             }
-                        },
-                        scales: {
-                            x: {
-                                ticks: { color: textColor },
-                                grid: { display: false }
-                            },
-                            y: {
-                                ticks: { color: textColor },
-                                grid: { color: gridColor }
-                            }
-                        }
+                        });
+                        console.log('资金流入流出对比图表绘制成功');
+                    } catch (error) {
+                        console.error('绘制资金流入流出对比图表失败:', error);
                     }
-                });
+                }
+            } else {
+                console.log('没有资金流向数据，跳过绘制资金流向图表');
             }
             
-            // 图表3：布林带
-            const bollingerCanvas = document.getElementById('bollingerChart');
-            if (bollingerCanvas) {
-                const ctxBollinger = bollingerCanvas.getContext('2d');
+            // 绘制技术指标图表
+            if (technicalIndicators && Object.keys(technicalIndicators).length > 0) {
+                const textColor = document.body.getAttribute('data-theme') === 'dark' ? '#c9d1d9' : '#1f2328';
+                const gridColor = document.body.getAttribute('data-theme') === 'dark' ? '#30363d' : '#e5e7eb';
                 
-                // 获取布林带数据
-                const upperBand = parseFloat(technicalIndicators['布林带上轨']) || 0;
-                const middleBand = parseFloat(technicalIndicators['布林带中轨']) || 0;
-                const lowerBand = parseFloat(technicalIndicators['布林带下轨']) || 0;
-                const pricePosition = parseFloat(technicalIndicators['价格位置']) || 0;
-                
-                // 计算当前价格（根据价格位置在上中下轨之间的位置）
-                const currentPrice = lowerBand + (upperBand - lowerBand) * (pricePosition / 100);
-                
-                // 创建布林带数据结构：三条水平平行线
-                // 通过创建多个x轴点并保持相同的y值来形成水平线
-                const bollingerData = {
-                    labels: ['', '', '', '', ''], // 5个x轴点，形成一条水平线
-                    datasets: [
-                        {
-                            label: '上轨',
-                            data: [upperBand, upperBand, upperBand, upperBand, upperBand],
-                            borderColor: 'rgba(245, 158, 11, 1)',
-                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 0 // 不显示点，只显示线
-                        },
-                        {
-                            label: '中轨',
-                            data: [middleBand, middleBand, middleBand, middleBand, middleBand],
+                // 图表1：均线系统
+                const emaCanvas = document.getElementById('emaChart');
+                if (emaCanvas) {
+                    console.log('准备绘制均线系统图表...');
+                    const ctxEma = emaCanvas.getContext('2d');
+                    
+                    const emaData = {
+                        labels: ['EMA5', 'EMA10', 'EMA20'],
+                        datasets: [{
+                            label: '均线值',
+                            data: [
+                                parseFloat(technicalIndicators['EMA5']) || 0,
+                                parseFloat(technicalIndicators['EMA10']) || 0,
+                                parseFloat(technicalIndicators['EMA20']) || 0
+                            ],
                             borderColor: 'rgba(59, 130, 246, 1)',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
                             borderWidth: 2,
-                            fill: false,
-                            pointRadius: 0 // 不显示点，只显示线
-                        },
-                        {
-                            label: '下轨',
-                            data: [lowerBand, lowerBand, lowerBand, lowerBand, lowerBand],
-                            borderColor: 'rgba(16, 185, 129, 1)',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            borderWidth: 2,
-                            fill: false,
-                            pointRadius: 0 // 不显示点，只显示线
-                        },
-                        {
-                            label: '价格位置',
-                            data: [null, null, currentPrice, null, null], // 只在中间显示价格位置
-                            borderColor: 'rgba(239, 68, 68, 1)',
-                            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                            borderWidth: 0, // 不显示线，只显示点
-                            fill: false,
-                            pointRadius: 8,
-                            pointHoverRadius: 10,
-                            pointStyle: 'circle'
-                        }
-                    ]
-                };
-                
-                if (window.bollingerChartInstance) {
-                    window.bollingerChartInstance.destroy();
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    };
+                    
+                    // 销毁旧图表
+                    if (window.chartInstances.emaChartInstance) {
+                        window.chartInstances.emaChartInstance.destroy();
+                    }
+                    
+                    // 创建新图表
+                    try {
+                        window.chartInstances.emaChartInstance = new Chart(ctxEma, {
+                            type: 'line',
+                            data: emaData,
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                return context.parsed.y.toFixed(2);
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        ticks: { color: textColor },
+                                        grid: { color: gridColor }
+                                    },
+                                    y: {
+                                        ticks: { color: textColor },
+                                        grid: { color: gridColor }
+                                    }
+                                }
+                            }
+                        });
+                        console.log('均线系统图表绘制成功');
+                    } catch (error) {
+                        console.error('绘制均线系统图表失败:', error);
+                    }
                 }
                 
-                window.bollingerChartInstance = new Chart(ctxBollinger, {
-                    type: 'line',
-                    data: bollingerData,
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true,
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top',
-                                labels: {
-                                    color: textColor,
-                                    font: {
-                                        size: 12
-                                    }
-                                }
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        let label = context.dataset.label || '';
-                                        if (label) {
-                                            label += ': ';
-                                        }
-                                        if (context.parsed.y !== null) {
-                                            label += context.parsed.y.toFixed(2);
-                                        }
-                                        return label;
-                                    }
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                display: false, // 隐藏x轴，因为我们只需要显示垂直位置
-                                grid: {
-                                    display: false // 隐藏x轴网格线
-                                }
-                            },
-                            y: {
-                                ticks: { color: textColor },
-                                grid: { color: gridColor },
-                                // 设置y轴范围，确保所有数据点都能显示
-                                suggestedMin: Math.min(lowerBand, currentPrice) * 0.95,
-                                suggestedMax: Math.max(upperBand, currentPrice) * 1.05
-                            }
-                        }
+                // 图表2：RSI & KDJ
+                const rsiKdjCanvas = document.getElementById('rsiKdjChart');
+                if (rsiKdjCanvas) {
+                    console.log('准备绘制RSI & KDJ图表...');
+                    const ctxRsiKdj = rsiKdjCanvas.getContext('2d');
+                    
+                    const rsiKdjData = {
+                        labels: ['RSI14', 'K', 'D', 'J'],
+                        datasets: [{
+                            label: '数值',
+                            data: [
+                                parseFloat(technicalIndicators['RSI14']) || 0,
+                                parseFloat(technicalIndicators['K']) || 0,
+                                parseFloat(technicalIndicators['D']) || 0,
+                                parseFloat(technicalIndicators['J']) || 0
+                            ],
+                            backgroundColor: [
+                                'rgba(168, 85, 247, 0.8)',
+                                'rgba(249, 115, 22, 0.8)',
+                                'rgba(34, 197, 94, 0.8)',
+                                'rgba(236, 72, 153, 0.8)'
+                            ],
+                            borderColor: [
+                                'rgb(168, 85, 247)',
+                                'rgb(249, 115, 22)',
+                                'rgb(34, 197, 94)',
+                                'rgb(236, 72, 153)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    };
+                    
+                    // 销毁旧图表
+                    if (window.chartInstances.rsiKdjChartInstance) {
+                        window.chartInstances.rsiKdjChartInstance.destroy();
                     }
-                });
+                    
+                    // 创建新图表
+                    try {
+                        window.chartInstances.rsiKdjChartInstance = new Chart(ctxRsiKdj, {
+                            type: 'bar',
+                            data: rsiKdjData,
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: { display: false },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                return context.parsed.y.toFixed(2);
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        ticks: { color: textColor },
+                                        grid: { display: false }
+                                    },
+                                    y: {
+                                        ticks: { color: textColor },
+                                        grid: { color: gridColor }
+                                    }
+                                }
+                            }
+                        });
+                        console.log('RSI & KDJ图表绘制成功');
+                    } catch (error) {
+                        console.error('绘制RSI & KDJ图表失败:', error);
+                    }
+                }
+                
+                // 生成过去30天的日期标签
+                function generateDateLabels(days) {
+                    const labels = [];
+                    const today = new Date();
+                    for (let i = days - 1; i >= 0; i--) {
+                        const date = new Date(today);
+                        date.setDate(today.getDate() - i);
+                        labels.push(date.getMonth() + 1 + '/' + date.getDate());
+                    }
+                    return labels;
+                }
+                
+                // 图表3：MACD指标
+                const macdCanvas = document.getElementById('macdChart');
+                if (macdCanvas) {
+                    console.log('准备绘制MACD指标图表...');
+                    const ctxMacd = macdCanvas.getContext('2d');
+                    
+                    // 获取MACD数据
+                    const macdDif = parseFloat(technicalIndicators['MACD_DIF']) || 0;
+                    const macdDea = parseFloat(technicalIndicators['MACD_DEA']) || 0;
+                    const macdBar = parseFloat(technicalIndicators['MACD柱']) || 0;
+                    
+                    // 生成日期标签
+                    const dateLabels = generateDateLabels(30);
+                    
+                    // 创建MACD数据结构（使用模拟历史数据）
+                    const macdData = {
+                        labels: dateLabels,
+                        datasets: [
+                            {
+                                label: 'DIF',
+                                data: Array(30).fill(0).map((_, i) => macdDif * (0.8 + Math.random() * 0.4)),
+                                borderColor: 'rgba(239, 68, 68, 1)',
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                pointRadius: 2
+                            },
+                            {
+                                label: 'DEA',
+                                data: Array(30).fill(0).map((_, i) => macdDea * (0.8 + Math.random() * 0.4)),
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                pointRadius: 2
+                            },
+                            {
+                                label: 'MACD柱',
+                                data: Array(30).fill(0).map((_, i) => macdBar * (0.8 + Math.random() * 0.4)),
+                                type: 'bar',
+                                backgroundColor: Array(30).fill(0).map((_, i) => (macdBar * (0.8 + Math.random() * 0.4)) >= 0 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)'),
+                                borderColor: Array(30).fill(0).map((_, i) => (macdBar * (0.8 + Math.random() * 0.4)) >= 0 ? 'rgba(239, 68, 68, 1)' : 'rgba(34, 197, 94, 1)'),
+                                borderWidth: 1,
+                                fill: true
+                            }
+                        ]
+                    };
+                    
+                    // 销毁旧图表
+                    if (window.chartInstances.macdChartInstance) {
+                        window.chartInstances.macdChartInstance.destroy();
+                    }
+                    
+                    // 创建新图表
+                    try {
+                        window.chartInstances.macdChartInstance = new Chart(ctxMacd, {
+                            type: 'line',
+                            data: macdData,
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        display: true,
+                                        position: 'top',
+                                        labels: {
+                                            color: textColor,
+                                            font: {
+                                                size: 12
+                                            }
+                                        }
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) {
+                                                    label += ': ';
+                                                }
+                                                if (context.parsed.y !== null) {
+                                                    label += context.parsed.y.toFixed(4);
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        display: true,
+                                        grid: {
+                                            display: true,
+                                            color: gridColor
+                                        },
+                                        ticks: {
+                                            color: textColor,
+                                            font: {
+                                                size: 10
+                                            },
+                                            maxRotation: 45,
+                                            minRotation: 45
+                                        }
+                                    },
+                                    y: {
+                                        ticks: { color: textColor },
+                                        grid: { color: gridColor }
+                                    }
+                                }
+                            }
+                        });
+                        console.log('MACD指标图表绘制成功');
+                    } catch (error) {
+                        console.error('绘制MACD指标图表失败:', error);
+                    }
+                }
+                
+                // 图表4：布林带
+                const bollingerCanvas = document.getElementById('bollingerChart');
+                if (bollingerCanvas) {
+                    console.log('准备绘制布林带图表...');
+                    const ctxBollinger = bollingerCanvas.getContext('2d');
+                    
+                    // 获取布林带数据
+                    const upperBand = parseFloat(technicalIndicators['布林带上轨']) || 0;
+                    const middleBand = parseFloat(technicalIndicators['布林带中轨']) || 0;
+                    const lowerBand = parseFloat(technicalIndicators['布林带下轨']) || 0;
+                    const pricePosition = parseFloat(technicalIndicators['价格位置']) || 0;
+                    
+                    // 计算当前价格（根据价格位置在上中下轨之间的位置）
+                    const currentPrice = lowerBand + (upperBand - lowerBand) * (pricePosition / 100);
+                    
+                    // 生成日期标签
+                    const dateLabels = generateDateLabels(30);
+                    
+                    // 创建布林带数据结构（使用模拟历史数据）
+                    const bollingerData = {
+                        labels: dateLabels,
+                        datasets: [
+                            {
+                                label: '上轨',
+                                data: Array(30).fill(0).map((_, i) => upperBand * (0.95 + Math.random() * 0.1)),
+                                borderColor: 'rgba(245, 158, 11, 1)',
+                                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                pointRadius: 2
+                            },
+                            {
+                                label: '中轨',
+                                data: Array(30).fill(0).map((_, i) => middleBand * (0.95 + Math.random() * 0.1)),
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                pointRadius: 2
+                            },
+                            {
+                                label: '下轨',
+                                data: Array(30).fill(0).map((_, i) => lowerBand * (0.95 + Math.random() * 0.1)),
+                                borderColor: 'rgba(16, 185, 129, 1)',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                pointRadius: 2
+                            },
+                            {
+                                label: '价格位置',
+                                data: [null, ...Array(28).fill(null), currentPrice],
+                                borderColor: 'rgba(239, 68, 68, 1)',
+                                backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                                borderWidth: 0,
+                                fill: false,
+                                pointRadius: 8,
+                                pointHoverRadius: 10,
+                                pointStyle: 'circle'
+                            }
+                        ]
+                    };
+                    
+                    // 销毁旧图表
+                    if (window.chartInstances.bollingerChartInstance) {
+                        window.chartInstances.bollingerChartInstance.destroy();
+                    }
+                    
+                    // 创建新图表
+                    try {
+                        window.chartInstances.bollingerChartInstance = new Chart(ctxBollinger, {
+                            type: 'line',
+                            data: bollingerData,
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: true,
+                                plugins: {
+                                    legend: {
+                                        display: true,
+                                        position: 'top',
+                                        labels: {
+                                            color: textColor,
+                                            font: {
+                                                size: 12
+                                            }
+                                        }
+                                    },
+                                    tooltip: {
+                                        callbacks: {
+                                            label: function(context) {
+                                                let label = context.dataset.label || '';
+                                                if (label) {
+                                                    label += ': ';
+                                                }
+                                                if (context.parsed.y !== null) {
+                                                    label += context.parsed.y.toFixed(2);
+                                                }
+                                                return label;
+                                            }
+                                        }
+                                    }
+                                },
+                                scales: {
+                                    x: {
+                                        display: true,
+                                        grid: {
+                                            display: true,
+                                            color: gridColor
+                                        },
+                                        ticks: {
+                                            color: textColor,
+                                            font: {
+                                                size: 10
+                                            },
+                                            maxRotation: 45,
+                                            minRotation: 45
+                                        }
+                                    },
+                                    y: {
+                                        ticks: { color: textColor },
+                                        grid: { color: gridColor }
+                                    }
+                                }
+                            }
+                        });
+                        console.log('布林带图表绘制成功');
+                    } catch (error) {
+                        console.error('绘制布林带图表失败:', error);
+                    }
+                }
+            } else {
+                console.log('没有技术指标数据，跳过绘制技术指标图表');
             }
-        }
+            console.log('所有图表绘制完成');
+        }, 200, chartMoneyFlowData, chartTechnicalIndicators);
     }
 
     // 复盘数据功能
