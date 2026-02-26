@@ -1176,6 +1176,69 @@ function getTencentDepth($symbol) {
     ];
 }
 
+/**
+ * 尝试获取股票对应的港股信息
+ * 港股代码通常为5位数字，腾讯财经接口使用 hk 前缀
+ */
+function getHongKongStockInfo($stockName) {
+    try {
+        // 常见的港股代码前缀，用于尝试匹配
+        $hkCodePrefixes = ['00700', '00998', '00388', '01299', '00883', '00939', '01398', '02318', '00288', '01810'];
+        
+        // 尝试每个可能的港股代码
+        foreach ($hkCodePrefixes as $hkCode) {
+            $fullHkCode = 'hk' . $hkCode;
+            $hkData = getTencentDepth($fullHkCode);
+            
+            // 检查是否成功获取数据且名称匹配
+            if (!isset($hkData['error']) && isset($hkData['名称'])) {
+                // 简单的名称匹配逻辑：港股名称通常包含A股名称的关键字
+                if (strpos($hkData['名称'], $stockName) !== false || strpos($stockName, $hkData['名称']) !== false) {
+                    return $hkData;
+                }
+            }
+        }
+        
+        // 尝试通过股票名称搜索港股
+        // 使用东方财富的搜索接口尝试找到港股
+        $url = 'https://searchapi.eastmoney.com/api/suggest/get?input=' . urlencode($stockName) . '&type=14&count=20';
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_REFERER, 'https://www.eastmoney.com/');
+        
+        $raw = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($httpCode === 200 && !empty($raw)) {
+            $data = json_decode($raw, true);
+            if ($data && isset($data['QuotationCodeTable']['Data'])) {
+                foreach ($data['QuotationCodeTable']['Data'] as $item) {
+                    if (empty($item['Name']) || empty($item['Code'])) continue;
+                    
+                    // 检查是否是港股（通常代码长度为5位）
+                    if (strlen($item['Code']) == 5) {
+                        $hkCode = 'hk' . $item['Code'];
+                        $hkData = getTencentDepth($hkCode);
+                        if (!isset($hkData['error'])) {
+                            return $hkData;
+                        }
+                    }
+                }
+            }
+        }
+        
+        return null;
+    } catch (Exception $e) {
+        error_log('获取港股信息失败: ' . $e->getMessage());
+        return null;
+    }
+}
+
 // 发送进度信息：开始获取股票信息
 sendProgress(10, '正在获取股票信息...');
 
@@ -1195,6 +1258,13 @@ $marketData = getTencentDepth($symbol);
 if (isset($marketData['error'])) {
     echo "TEXT:❌ 错误: " . $marketData['error'] . "\n";
     exit;
+}
+
+// 尝试获取对应的港股信息
+$hkData = null;
+if (isset($marketData['名称'])) {
+    $stockName = $marketData['名称'];
+    $hkData = getHongKongStockInfo($stockName);
 }
 
 // 发送进度信息：股票信息获取完成
@@ -1273,11 +1343,12 @@ sendProgress(55, '股票最新资讯获取完成，正在准备AI分析...');
 $enhancedMarketData = array_merge($marketData, [
     '板块信息' => $sectorData,
     '资金流向' => $moneyFlowData,
-    '技术指标' => $technicalIndicators
+    '技术指标' => $technicalIndicators,
+    '港股信息' => $hkData
 ]);
 
 // 1. 发送行情数据表格给前端
-echo "DATA:" . json_encode(['stockData' => $enhancedMarketData, 'indexData' => $shIndexData, 'newsData' => $stockNews], JSON_UNESCAPED_UNICODE) . "\n";
+echo "DATA:" . json_encode(['stockData' => $enhancedMarketData, 'indexData' => $shIndexData, 'newsData' => $stockNews, 'hkData' => $hkData], JSON_UNESCAPED_UNICODE) . "\n";
 sseFlush();
 
 // 发送进度信息：开始AI分析
@@ -1291,20 +1362,23 @@ $currentDateTime = date('Y-m-d H:i:s');
 $userPrompt = "分析时间：{$currentDateTime}\n\n";
 $userPrompt .= "数据源：\n";
 $userPrompt .= "1. 实时盘口：" . json_encode($marketData, JSON_UNESCAPED_UNICODE) . "\n";
+if ($hkData) {
+    $userPrompt .= "2. 港股信息：" . json_encode($hkData, JSON_UNESCAPED_UNICODE) . "\n";
+}
 if ($shIndexData) {
-    $userPrompt .= "2. 上证指数：" . json_encode($shIndexData, JSON_UNESCAPED_UNICODE) . "\n";
+    $userPrompt .= "3. 上证指数：" . json_encode($shIndexData, JSON_UNESCAPED_UNICODE) . "\n";
 }
 if (!empty($sectorData)) {
-    $userPrompt .= "3. 所属板块信息：" . json_encode($sectorData, JSON_UNESCAPED_UNICODE) . "\n";
+    $userPrompt .= "4. 所属板块信息：" . json_encode($sectorData, JSON_UNESCAPED_UNICODE) . "\n";
 }
 if (!empty($moneyFlowData)) {
-    $userPrompt .= "4. 资金流向数据：" . json_encode($moneyFlowData, JSON_UNESCAPED_UNICODE) . "\n";
+    $userPrompt .= "5. 资金流向数据：" . json_encode($moneyFlowData, JSON_UNESCAPED_UNICODE) . "\n";
 }
 if (!empty($technicalIndicators)) {
-    $userPrompt .= "5. 技术指标：" . json_encode($technicalIndicators, JSON_UNESCAPED_UNICODE) . "\n";
+    $userPrompt .= "6. 技术指标：" . json_encode($technicalIndicators, JSON_UNESCAPED_UNICODE) . "\n";
 }
 // 构建最新资讯和详细资讯
-$userPrompt .= "6. 最新资讯：" . json_encode($stockNews, JSON_UNESCAPED_UNICODE) . "\n";
+$userPrompt .= "7. 最新资讯：" . json_encode($stockNews, JSON_UNESCAPED_UNICODE) . "\n";
 
 // 添加近两日包含股票名称或代码的资讯详情
 $hasNewsContent = false;
@@ -1346,18 +1420,19 @@ $userPrompt .= "2. 请分析板块表现（如有）\n";
 $userPrompt .= "3. 请分析资金流向（主力、超大单、大单、中单、小单）对价格的影响\n";
 $userPrompt .= "4. 请深入分析技术指标（EMA均线系统、RSI强弱指标、KDJ随机指标、布林带通道），包括超买超卖、金叉死叉、价格位置等\n";
 $userPrompt .= "5. 请分析最新资讯（如有）\n";
-$userPrompt .= "6. 在分析过程中综合考虑大盘走势、板块表现、走势、量价关系、技术指标、资金流向等因素\n";
-$userPrompt .= "7. 提供清晰的结论和投资建议，包括操作方向、仓位建议、价格区间、目标价/止损价等\n";
-$userPrompt .= "8. 如果是ETF基金，请分析其跟踪标的的市场表现\n";
-$userPrompt .= "9. 重要：所有数据中出现的\"-\"符号表示该数据未能成功获取，请在分析时完全忽略这些数据，不要提及或试图解释\"-\"的含义\n";
-$userPrompt .= "10. 请为当前股票打分，评分范围为-100到+100，+100表示极度看好，-100表示极度看空\n";
-$userPrompt .= "11. 请给出一段简洁的评价，总结股票的当前状态和前景\n";
-$userPrompt .= "12. 如果股票今日跌停或涨停，请分析第二日连板的概率及原因\n";
-$userPrompt .= "13. 如果股票今日没有跌停或涨停，请给出第二日的涨跌预测\n";
+$userPrompt .= "6. 如果有港股信息，请分析港股表现与A股的关联性，包括价格差异、涨跌幅对比等\n";
+$userPrompt .= "7. 在分析过程中综合考虑大盘走势、板块表现、走势、量价关系、技术指标、资金流向等因素\n";
+$userPrompt .= "8. 提供清晰的结论和投资建议，包括操作方向、仓位建议、价格区间、目标价/止损价等\n";
+$userPrompt .= "9. 如果是ETF基金，请分析其跟踪标的的市场表现\n";
+$userPrompt .= "10. 重要：所有数据中出现的\"-\"符号表示该数据未能成功获取，请在分析时完全忽略这些数据，不要提及或试图解释\"-\"的含义\n";
+$userPrompt .= "11. 请为当前股票打分，评分范围为-100到+100，+100表示极度看好，-100表示极度看空\n";
+$userPrompt .= "12. 请给出一段简洁的评价，总结股票的当前状态和前景\n";
+$userPrompt .= "13. 如果股票今日跌停或涨停，请分析第二日连板的概率及原因\n";
+$userPrompt .= "14. 如果股票今日没有跌停或涨停，请给出第二日的涨跌预测\n";
 
 // 如果有选择战法，添加战法分析要求
 if (!empty($selectedStrategies)) {
-    $userPrompt .= "10. 请针对以下选定的战法进行单独分析，每个战法分析一个板块：\n";
+    $userPrompt .= "15. 请针对以下选定的战法进行单独分析，每个战法分析一个板块：\n";
     foreach ($selectedStrategies as $index => $strategy) {
         $userPrompt .= ($index + 1) . ". {$strategy}\n";
     }
@@ -1370,7 +1445,7 @@ if (!empty($selectedStrategies)) {
 
 // 如果有复盘数据，添加复盘分析要求
 if (!empty($parsedReviewData)) {
-    $userPrompt .= "10. 请根据用户提供的复盘数据，结合当日的分时图、成交量、MA5/MA10、RSI、MACD、板块涨跌幅和大盘走势等数据，进行全面分析：\n";
+    $userPrompt .= "16. 请根据用户提供的复盘数据，结合当日的分时图、成交量、MA5/MA10、RSI、MACD、板块涨跌幅和大盘走势等数据，进行全面分析：\n";
     $userPrompt .= "   a. 是否符合趋势结构\n";
     $userPrompt .= "   b. 是否属于情绪化操作\n";
     $userPrompt .= "   c. 盈亏比是否合理\n";
