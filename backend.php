@@ -530,6 +530,7 @@ $fullContent = isset($_POST['fullContent']) ? true : false;
 $fundDirector = isset($_POST['fundDirector']) ? true : false;
 $strategies = $_POST['strategies'] ?? '[]';
 $selectedStrategies = json_decode($strategies, true) ?? [];
+$specialEvent = trim($_POST['specialEvent'] ?? '');
 
 // 解析复盘数据
 $parsedReviewData = [];
@@ -1767,6 +1768,12 @@ if (!empty($parsedReviewData)) {
         $userPrompt .= ($index + 1) . ". {$type}，价格：{$price} 元，数量：{$amount} 股/份，时间：{$time}，剩余数量：{$remaining}\n";
     }
     $userPrompt .= "\n";
+}
+
+// 处理特殊事件
+if (!empty($specialEvent)) {
+    $userPrompt .= "\n特殊事件说明：{$specialEvent}\n";
+    $userPrompt .= "请结合此特殊事件对股票走势的影响进行分析。\n\n";
 }
 
 $userPrompt .= "分析要求：\n";
