@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>积分历史 - AI 股票分析系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS变量 - 默认浅色模式（不跟随首页变化） */
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1f2328;
+            --card-bg: #f6f8fa;
+            --border-color: #d1d9e0;
+            --input-bg: #ffffff;
+            --hover-bg: #f3f4f6;
+            --gray-400: #656d76;
+            --gray-500: #8b949e;
+            --primary-color: #238636;
+            --primary-hover: #2ea043;
+            --blue-400: #0969da;
+            --red-400: #cf222e;
+            --green-400: #1a7f37;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            padding: 1.5rem;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            body {
+                font-size: 16px;
+                padding: 1rem;
+            }
+            
+            .card {
+                padding: 1.25rem;
+            }
+            
+            button {
+                padding: 0.875rem 1.75rem;
+                min-height: 44px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="max-w-4xl mx-auto">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-2xl font-bold flex items-center gap-2">📊 AI 股票分析系统</h1>
+            <div class="flex items-center gap-4">
+                <button id="backBtn" class="px-4 py-2 border border-border-color rounded hover:bg-hover-bg transition-colors">
+                    返回首页
+                </button>
+            </div>
+        </div>
+        
+        <!-- 积分历史 -->
+        <div class="card p-8">
+            <h2 class="text-xl font-bold mb-6 text-center">积分历史</h2>
+            
+            <div class="border border-border-color rounded overflow-hidden">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-border-color">
+                            <th class="px-4 py-3 text-left">时间</th>
+                            <th class="px-4 py-3 text-left">类型</th>
+                            <th class="px-4 py-3 text-left">积分</th>
+                            <th class="px-4 py-3 text-left">原因</th>
+                            <th class="px-4 py-3 text-left">操作人</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pointsHistory">
+                        <tr>
+                            <td colspan="5" class="px-4 py-8 text-center text-gray-400">
+                                暂无积分记录
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="mt-6 text-center">
+                <a href="recharge.html" class="text-blue-400 hover:underline">去充值 →</a>
+            </div>
+        </div>
+        
+        <div class="mt-8 text-center text-gray-400 text-sm">
+            &copy; 2026 AI 股票分析系统
+        </div>
+    </div>
+    
+    <script>
+        // 检查登录状态
+        async function checkLogin() {
+            try {
+                const response = await fetch('login.php?action=checklogin');
+                const data = await response.json();
+                if (!data.logged) {
+                    window.location.href = 'index.html';
+                }
+                return data.user;
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+                window.location.href = 'index.html';
+            }
+        }
+        
+        // 获取积分历史
+        async function getPointsHistory() {
+            const historyBody = document.getElementById('pointsHistory');
+            historyBody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-blue-400 animate-pulse">正在加载积分历史...</td></tr>';
+            
+            try {
+                const response = await fetch('backend.php?action=points_history');
+                const data = await response.json();
+                
+                historyBody.innerHTML = '';
+                
+                if (data.error) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td colspan="5" class="px-4 py-8 text-center text-gray-400">${data.error}</td>`;
+                    historyBody.appendChild(tr);
+                    return;
+                }
+                
+                if (data.length === 0) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = '<td colspan="5" class="px-4 py-8 text-center text-gray-400">暂无积分记录</td>';
+                    historyBody.appendChild(tr);
+                    return;
+                }
+                
+                data.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'border-b border-border-color hover:bg-hover-bg';
+                    
+                    const typeText = item.type === 'add' ? '增加' : '扣除';
+                    const pointsText = item.type === 'add' ? `+${item.points}` : `-${item.points}`;
+                    const pointsClass = item.type === 'add' ? 'text-green-400' : 'text-red-400';
+                    
+                    tr.innerHTML = `
+                        <td class="px-4 py-3">${item.created_at}</td>
+                        <td class="px-4 py-3">${typeText}</td>
+                        <td class="px-4 py-3 ${pointsClass}">${pointsText}</td>
+                        <td class="px-4 py-3">${item.reason}</td>
+                        <td class="px-4 py-3">${item.admin_username || '系统'}</td>
+                    `;
+                    
+                    historyBody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('获取积分历史失败:', error);
+                historyBody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-red-400">加载失败，请刷新重试</td></tr>';
+            }
+        }
+        
+        // 返回首页
+        document.getElementById('backBtn').addEventListener('click', function() {
+            window.location.href = 'index.html';
+        });
+        
+        // 加载系统名称
+        async function loadSystemName() {
+            try {
+                const response = await fetch('backend.php?action=get_system_settings');
+                const data = await response.json();
+                
+                if (data.system_name) {
+                    document.querySelector('h1').innerHTML = `📊 ${data.system_name}`;
+                    document.title = `积分历史 - ${data.system_name}`;
+                }
+            } catch (error) {
+                console.error('加载系统名称失败:', error);
+            }
+        }
+        
+        // 页面加载时执行
+        window.onload = async function() {
+            await loadSystemName();
+            await checkLogin();
+            await getPointsHistory();
+        };
+    </script>
+</body>
+</html>

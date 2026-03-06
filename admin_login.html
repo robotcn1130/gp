@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台登录 - AI 股票分析系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS变量 */
+        :root {
+            --bg-color: #0d1117;
+            --text-color: #c9d1d9;
+            --card-bg: #161b22;
+            --border-color: #30363d;
+            --input-bg: #0d1117;
+            --hover-bg: #21262d;
+            --gray-400: #8b949e;
+            --gray-500: #6e7681;
+            --primary-color: #238636;
+            --primary-hover: #2ea043;
+            --blue-400: #58a6ff;
+            --red-400: #f85149;
+            --green-400: #7ee787;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        
+        input {
+            background: var(--input-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: var(--blue-400);
+            box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.2);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            body {
+                font-size: 16px;
+                padding: 1rem;
+            }
+            
+            .card {
+                padding: 1.25rem;
+            }
+            
+            input {
+                padding: 0.875rem;
+                min-height: 44px;
+            }
+            
+            button {
+                padding: 0.875rem 1.75rem;
+                min-height: 44px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="max-w-md w-full">
+        <div class="card p-8">
+            <h1 class="text-2xl font-bold mb-6 text-center">后台管理登录</h1>
+            
+            <form id="loginForm" action="admin.php" method="POST">
+                <input type="hidden" name="action" value="login">
+                
+                <div class="mb-4">
+                    <label class="block text-xs text-gray-500 mb-1">用户名</label>
+                    <input type="text" name="username" required class="w-full bg-input-bg border border-border-color rounded p-3 outline-none focus:border-blue-500">
+                </div>
+                
+                <div class="mb-6">
+                    <label class="block text-xs text-gray-500 mb-1">密码</label>
+                    <input type="password" name="password" required class="w-full bg-input-bg border border-border-color rounded p-3 outline-none focus:border-blue-500">
+                </div>
+                
+                <div class="mb-6">
+                    <button type="submit" class="btn-primary text-white font-bold py-3 px-6 rounded w-full">登录</button>
+                </div>
+                
+                <div class="text-center text-gray-400 text-sm">
+                    <p id="loginError" class="text-red-400 mb-2"></p>
+                    <p>AI 股票分析系统后台管理</p>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // 表单提交处理
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await fetch('admin.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    window.location.href = 'admin.html';
+                } else {
+                    document.getElementById('loginError').textContent = result.error || '登录失败';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = '登录失败，请重试';
+                console.error('登录错误:', error);
+            }
+        });
+    </script>
+</body>
+</html>

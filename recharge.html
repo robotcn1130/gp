@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>充值中心 - AI 股票分析系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* CSS变量 - 默认浅色模式（不跟随首页变化） */
+        :root {
+            --bg-color: #ffffff;
+            --text-color: #1f2328;
+            --card-bg: #f6f8fa;
+            --border-color: #d1d9e0;
+            --input-bg: #ffffff;
+            --hover-bg: #f3f4f6;
+            --gray-400: #656d76;
+            --gray-500: #8b949e;
+            --primary-color: #238636;
+            --primary-hover: #2ea043;
+            --blue-400: #0969da;
+            --red-400: #cf222e;
+            --green-400: #1a7f37;
+        }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: all 0.3s ease;
+            padding: 1.5rem;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+        }
+        
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            body {
+                font-size: 16px;
+                padding: 1rem;
+            }
+            
+            .card {
+                padding: 1.25rem;
+            }
+            
+            button {
+                padding: 0.875rem 1.75rem;
+                min-height: 44px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="max-w-4xl mx-auto">
+        <!-- 顶部导航 -->
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-2xl font-bold flex items-center gap-2">📊 AI 股票分析系统</h1>
+            <div class="flex items-center gap-4">
+                <button id="backBtn" class="px-4 py-2 border border-border-color rounded hover:bg-hover-bg transition-colors">
+                    返回首页
+                </button>
+            </div>
+        </div>
+        
+        <!-- 充值中心 -->
+        <div class="card p-8">
+            <h2 class="text-xl font-bold mb-6 text-center">充值中心</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- 微信收款二维码 -->
+                <div class="flex flex-col items-center">
+                    <h3 class="text-lg font-bold mb-4">微信收款二维码</h3>
+                    <div class="border border-border-color rounded p-4 bg-hover-bg mb-4">
+                        <img id="qrcodeImg" src="" alt="微信收款二维码" class="w-64 h-64 object-contain">
+                    </div>
+                    <p class="text-gray-400 text-center" id="qrcodeText">
+                        请扫描二维码进行充值
+                    </p>
+                </div>
+                
+                <!-- 充值注意事项 -->
+                <div>
+                    <h3 class="text-lg font-bold mb-4">充值注意事项</h3>
+                    <div class="border border-border-color rounded p-4 bg-hover-bg">
+                        <ul id="rechargeNotes" class="list-disc pl-5 space-y-2 text-gray-400">
+                            <li>请扫描二维码进行充值</li>
+                            <li>充值后请联系管理员确认</li>
+                            <li>充值金额将转换为相应的积分</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- 充值比例 -->
+                    <div class="mt-6 border border-border-color rounded p-4 bg-hover-bg">
+                        <h4 class="font-bold mb-2">充值比例</h4>
+                        <p class="text-gray-400">1元 = 10积分</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-8 text-center">
+                <a href="points_history.html" class="text-blue-400 hover:underline">查看积分历史 →</a>
+            </div>
+        </div>
+        
+        <div class="mt-8 text-center text-gray-400 text-sm">
+            &copy; 2026 AI 股票分析系统
+        </div>
+    </div>
+    
+    <script>
+        // 检查登录状态
+        async function checkLogin() {
+            try {
+                const response = await fetch('login.php?action=checklogin');
+                const data = await response.json();
+                if (!data.logged) {
+                    window.location.href = 'index.html';
+                }
+                return data.user;
+            } catch (error) {
+                console.error('检查登录状态失败:', error);
+                window.location.href = 'index.html';
+            }
+        }
+        
+        // 获取充值信息
+        async function getRechargeInfo() {
+            const qrcodeText = document.getElementById('qrcodeText');
+            const originalText = qrcodeText.textContent;
+            qrcodeText.textContent = '正在加载充值信息...';
+            
+            try {
+                const response = await fetch('backend.php?action=get_recharge_info');
+                const data = await response.json();
+                
+                if (data.qrcode) {
+                    document.getElementById('qrcodeImg').src = data.qrcode;
+                }
+                
+                if (data.notes) {
+                    const notesList = document.getElementById('rechargeNotes');
+                    notesList.innerHTML = '';
+                    data.notes.split('\n').forEach(note => {
+                        if (note.trim()) {
+                            const li = document.createElement('li');
+                            li.textContent = note.trim();
+                            notesList.appendChild(li);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('获取充值信息失败:', error);
+                qrcodeText.textContent = '加载失败，请刷新重试';
+            } finally {
+                if (qrcodeText.textContent === '正在加载充值信息...') {
+                    qrcodeText.textContent = originalText;
+                }
+            }
+        }
+        
+        // 返回首页
+        document.getElementById('backBtn').addEventListener('click', function() {
+            window.location.href = 'index.html';
+        });
+        
+        // 加载系统名称
+        async function loadSystemName() {
+            try {
+                const response = await fetch('backend.php?action=get_system_settings');
+                const data = await response.json();
+                
+                if (data.system_name) {
+                    document.querySelector('h1').innerHTML = `📊 ${data.system_name}`;
+                    document.title = `充值中心 - ${data.system_name}`;
+                }
+            } catch (error) {
+                console.error('加载系统名称失败:', error);
+            }
+        }
+        
+        // 页面加载时执行
+        window.onload = async function() {
+            await loadSystemName();
+            await checkLogin();
+            await getRechargeInfo();
+        };
+    </script>
+</body>
+</html>
