@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>基于DeepSeek的AI股票分析</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="js/dompdf.js"></script>
+    <script src="js/SourceHanSansSC-Normal-Min-normal.js"></script>
     <style>
         /* CSS变量 - 默认浅色模式 */
         :root {
@@ -537,6 +538,14 @@
                     </div>
                 </div>
                 
+                <!-- 只获取数据模式 -->
+                <div class="md:col-span-3">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="dataOnlyToggle" name="dataOnly" class="w-4 h-4">
+                        <label for="dataOnlyToggle" class="text-sm">只获取数据（跳过AI分析，可导出数据给其他AI分析）</label>
+                    </div>
+                </div>
+                
                 <!-- 特殊事件输入 -->
                 <div class="md:col-span-3">
                     <label class="block text-xs text-gray-500 mb-1">特殊事件 或 对AI其他额外指定（可选）</label>
@@ -571,6 +580,17 @@
                     <div class="flex items-center gap-2">
                         <input type="checkbox" id="includeRealTimeToggle" name="includeRealTime" checked class="w-4 h-4">
                         <label for="includeRealTimeToggle" class="text-sm">包含实时价格计算均线（勾选后，今天开盘时会使用实时价格计算，前面的天数少取一天）</label>
+                    </div>
+                </div>
+                
+                <!-- 主力成本区分析 -->
+                <div class="md:col-span-3">
+                    <div class="flex items-center gap-2 p-3 bg-hover-bg rounded border border-border-color">
+                        <input type="checkbox" id="enableMainForceCostToggle" name="enableMainForceCost" checked class="w-4 h-4">
+                        <label for="enableMainForceCostToggle" class="text-sm cursor-pointer">
+                            <span class="font-bold text-blue-400">📊 启用主力成本区分析</span>
+                            <span class="text-gray-500 text-xs block mt-1">通过定增成本、主升浪启动区、筹码分布三种方法交叉估算机构真实成本区间，推算目标价和洗盘区间</span>
+                        </label>
                     </div>
                 </div>
                 
@@ -744,6 +764,10 @@
                         <input type="radio" id="exportImage" name="exportFormat" value="image" class="mr-2">
                         <label for="exportImage">图片</label>
                     </div>
+                    <div class="flex items-center">
+                        <input type="radio" id="exportText" name="exportFormat" value="text" class="mr-2">
+                        <label for="exportText">文本（适合AI分析）</label>
+                    </div>
                 </div>
             </div>
             <div>
@@ -766,6 +790,35 @@
             <div class="pt-4">
                 <button type="button" id="startExportBtn" class="btn-primary text-white font-bold py-2 px-4 rounded w-full">开始导出</button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- 导出文本数据模态框 -->
+<div id="exportTextModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+    <div class="card p-4 md:p-6 w-[95vw] md:max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold">📋 导出数据文本（适合AI分析）</h2>
+            <button type="button" id="closeExportTextBtn" class="text-gray-400 hover:text-gray-200 text-2xl leading-none">
+                ✕
+            </button>
+        </div>
+        <div class="mb-3 text-xs text-gray-400">
+            以下数据已格式化，适合复制给ChatGPT、Claude、DeepSeek等AI进行分析。点击"一键复制"即可复制全部内容。
+        </div>
+        <div class="flex-1 overflow-hidden flex flex-col min-h-0">
+            <textarea id="exportTextContent" class="flex-1 w-full bg-input-bg border border-border-color rounded p-3 text-sm resize-none outline-none focus:border-blue-500 font-mono" style="min-height: 300px; max-height: calc(90vh - 200px);" readonly placeholder="暂无数据"></textarea>
+        </div>
+        <div class="mt-4 flex flex-col sm:flex-row gap-2">
+            <button type="button" id="copyExportTextBtn" class="btn-primary text-white font-bold py-2 px-4 rounded flex-1 flex items-center justify-center gap-2">
+                <span>📋</span> 一键复制
+            </button>
+            <button type="button" id="closeExportTextBtn2" class="py-2 px-4 rounded border border-border-color hover:bg-hover-bg transition-colors flex-1">
+                关闭
+            </button>
+        </div>
+        <div id="copySuccessTip" class="hidden mt-2 text-center text-green-400 text-sm animate-pulse">
+            ✓ 已复制到剪贴板！
         </div>
     </div>
 </div>
@@ -1256,10 +1309,11 @@
             const moneyFlowData = item.moneyflow_data ? JSON.parse(item.moneyflow_data) : null;
             const technicalData = item.technical_data ? JSON.parse(item.technical_data) : null;
             const reviewData = item.review_data ? JSON.parse(item.review_data) : null;
+            const mainForceCostData = item.main_force_cost_data ? JSON.parse(item.main_force_cost_data) : null;
             const aiContent = item.ai_content || '';
             const fundDirectorContent = item.fund_director_content || '';
             
-            console.log('解析后的数据:', { marketData, indexData, newsData, sectorData, moneyFlowData, technicalData, reviewData, aiContent, fundDirectorContent });
+            console.log('解析后的数据:', { marketData, indexData, newsData, sectorData, moneyFlowData, technicalData, reviewData, mainForceCostData, aiContent, fundDirectorContent });
             
             // 整合数据
             let enhancedMarketData = marketData || {};
@@ -1273,6 +1327,9 @@
             }
             if (technicalData && Object.keys(technicalData).length > 0) {
                 enhancedMarketData['技术指标'] = technicalData;
+            }
+            if (mainForceCostData && Object.keys(mainForceCostData).length > 0) {
+                enhancedMarketData['主力成本区'] = mainForceCostData;
             }
             
             console.log('整合后的enhancedMarketData:', enhancedMarketData);
@@ -2007,6 +2064,13 @@
             return;
         }
         
+        // 如果选择文本格式，直接显示导出文本模态框
+        if (exportFormat === 'text') {
+            exportModal.classList.add('hidden');
+            showExportTextModal();
+            return;
+        }
+        
         let stockName = '股票';
         if (currentAnalysisData.marketData) {
             stockName = currentAnalysisData.marketData['名称'] || stockName;
@@ -2170,60 +2234,63 @@
         return ua.indexOf('micromessenger') !== -1;
     }
     
-    // 导出为PDF
+    // 导出为PDF - 使用 dompdf.js
     async function exportToPdf(element, stockName) {
-        const { jsPDF } = window.jspdf;
         let safeStockName = '股票';
         if (stockName && typeof stockName === 'string') {
             safeStockName = stockName.replace(/[\\/:*?"<>|]/g, '_');
         }
         
-        // 生成图片 - 使用更好的配置确保图表捕获
-        const canvas = await html2canvas(element, {
-            scale: 2,
-            useCORS: true,
-            logging: false,
-            scrollY: 0,
-            scrollX: 0,
-            windowWidth: element.scrollWidth,
-            windowHeight: element.scrollHeight,
-            backgroundColor: '#ffffff',
-            allowTaint: true,
-            imageTimeout: 15000
-        });
-        
-        const imgData = canvas.toDataURL('image/png');
-        
-        if (isWeChat()) {
-            showWeChatDownloadHelp(imgData, safeStockName + ' - 股票分析报告.png');
-            return;
+        try {
+            const blob = await dompdf(element, {
+                pagination: true,
+                format: 'a4',
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                fontConfig: {
+                    fontFamily: 'SourceHanSansSC-Normal-Min',
+                    fontBase64: window.fontBase64,
+                    fontStyle: 'normal',
+                    fontWeight: 400
+                },
+                pageConfig: {
+                    header: {
+                        content: safeStockName + ' - 股票分析报告',
+                        height: 40,
+                        contentColor: '#333333',
+                        contentFontSize: 14,
+                        contentPosition: 'center',
+                        padding: [0, 0, 0, 0]
+                    },
+                    footer: {
+                        content: '第 ${currentPage} 页 / 共 ${totalPages} 页',
+                        height: 30,
+                        contentColor: '#666666',
+                        contentFontSize: 10,
+                        contentPosition: 'center',
+                        padding: [0, 0, 0, 0]
+                    }
+                }
+            });
+            
+            if (isWeChat()) {
+                const url = URL.createObjectURL(blob);
+                showWeChatDownloadHelp(url, safeStockName + ' - 股票分析报告.pdf');
+                return;
+            }
+            
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = safeStockName + ' - 股票分析报告.pdf';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('PDF导出失败:', error);
+            alert('PDF导出失败: ' + error.message);
         }
-        
-        const imgWidth = 210;
-        const pageHeight = 295;
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        
-        // 创建PDF文档
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        
-        // 简单可靠的分页方式：逐页显示，每页只显示对应部分
-        let position = 0;
-        let heightLeft = imgHeight;
-        
-        // 第一页
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-        
-        // 后续页面
-        while (heightLeft > 0) {
-            position = position - pageHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-            heightLeft -= pageHeight;
-        }
-        
-        // 保存PDF
-        pdf.save(safeStockName + ' - 股票分析报告.pdf');
     }
     
     // 导出为图片
@@ -2335,6 +2402,9 @@
         strategies.push(checkbox.value);
     });
 
+    // 收集主力成本区分析选项
+    const enableMainForceCost = document.getElementById('enableMainForceCostToggle').checked;
+
     // 收集复盘数据
     const reviewData = [];
     const reviewRecords = document.querySelectorAll('.review-record');
@@ -2363,6 +2433,9 @@
         formData.append('strategies', JSON.stringify([]));
     }
 
+    // 将主力成本区分析选项添加到formData中
+    formData.append('enableMainForceCost', enableMainForceCost ? 'true' : 'false');
+
         // 重置当前分析数据
         currentAnalysisData = {
             id: null,
@@ -2386,9 +2459,18 @@
             // 检查是否启用了基金总监功能
             const fundDirectorEnabled = formData.get('fundDirector') !== null;
             
+            // 检查是否启用了"只获取数据"模式
+            const dataOnlyMode = formData.get('dataOnly') !== null;
+            
             // 如果启用了基金总监功能，移除该字段，先进行第一次分析
             if (fundDirectorEnabled) {
                 formData.delete('fundDirector');
+            }
+            
+            // 如果启用了"只获取数据"模式，移除该字段
+            if (dataOnlyMode) {
+                formData.delete('dataOnly');
+                formData.append('dataOnly', 'true');
             }
             
             const response = await fetch('backend.php', { method: 'POST', body: formData });
@@ -2498,6 +2580,11 @@
             // 从output.innerHTML中获取完整的HTML代码
             currentAnalysisData.aiContent = output.innerHTML;
             
+            // 如果是"只获取数据"模式，自动弹出导出文本模态框
+            if (dataOnlyMode && currentAnalysisData.marketData) {
+                showExportTextModal();
+            }
+            
             // 保存分析数据到历史记录
             console.log('准备保存分析数据到历史记录');
             console.log('currentAnalysisData:', currentAnalysisData);
@@ -2512,7 +2599,7 @@
             }
             
             // 如果启用了基金总监功能，现在执行第二次分析
-            if (fundDirectorEnabled) {
+            if (fundDirectorEnabled && !dataOnlyMode) {
                 await executeFundDirectorAnalysis(formData, currentAnalysisData);
             }
         } catch (err) {
@@ -2718,6 +2805,18 @@
         } else if (data['技术指标']) {
             // 直接从data中提取，用于历史记录查看
             technicalIndicators = data['技术指标'];
+        }
+        
+        // 提取主力成本区数据
+        let mainForceCostData = null;
+        if (stockData['主力成本区']) {
+            mainForceCostData = stockData['主力成本区'];
+        } else if (data['mainForceCostData']) {
+            // 直接从data中提取，用于历史记录查看
+            mainForceCostData = data['mainForceCostData'];
+        } else if (data['主力成本区']) {
+            // 直接从data中提取，用于历史记录查看
+            mainForceCostData = data['主力成本区'];
         }
         
         // 确保technicalIndicators是对象
@@ -3042,6 +3141,173 @@
         //     
         //     html += `</div></div>`;
         // }
+        
+        // 5. 主力成本区分析
+        if (mainForceCostData && Object.keys(mainForceCostData).length > 0) {
+            // 如果有调试信息但没有综合主力成本，显示原因
+            if (mainForceCostData['_debug_info'] && !mainForceCostData['综合主力成本']) {
+                html += `<div class="mb-6">
+                    <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 主力成本区分析</h4>
+                    <div class="card p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                        <div class="flex items-center gap-2">
+                            <span class="text-yellow-500">⚠️</span>
+                            <span class="text-sm text-yellow-700 dark:text-yellow-300">${mainForceCostData['_debug_info']}</span>
+                        </div>
+                    </div>
+                </div>`;
+            } else if (mainForceCostData['综合主力成本']) {
+                html += `<div class="mb-6">
+                    <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 主力成本区分析</h4>
+                    <div class="card p-4 mb-4">
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">主力成本推算（三种方法交叉估算）</h5>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-border-color">
+                                        <th class="text-left p-2 text-gray-400">分析方法</th>
+                                        <th class="text-right p-2 text-gray-400">成本区间</th>
+                                        <th class="text-right p-2 text-gray-400">平均成本</th>
+                                        <th class="text-left p-2 text-gray-400">说明</th>
+                                    </tr>
+                                </thead>
+                                <tbody>`;
+            
+            // 定增成本区
+            if (mainForceCostData['定增成本区']) {
+                const dz = mainForceCostData['定增成本区'];
+                html += `<tr class="border-b border-border-color">
+                    <td class="p-2 font-medium text-blue-500">定增成本</td>
+                    <td class="p-2 text-right">${dz['价格区间'] ? dz['价格区间'][0] + ' - ' + dz['价格区间'][1] : '-'}</td>
+                    <td class="p-2 text-right font-bold">${dz['平均成本'] || '-'}</td>
+                    <td class="p-2 text-xs text-gray-400">定增次数: ${dz['定增次数'] || 0}次</td>
+                </tr>`;
+            }
+            
+            // 主升浪启动区
+            if (mainForceCostData['主升浪启动区']) {
+                const qs = mainForceCostData['主升浪启动区'];
+                html += `<tr class="border-b border-border-color">
+                    <td class="p-2 font-medium text-green-500">主升浪启动区</td>
+                    <td class="p-2 text-right">${qs['价格区间'] ? qs['价格区间'][0] + ' - ' + qs['价格区间'][1] : '-'}</td>
+                    <td class="p-2 text-right font-bold">${qs['平均成本'] || '-'}</td>
+                    <td class="p-2 text-xs text-gray-400">放量突破次数: ${qs['启动次数'] || 0}次</td>
+                </tr>`;
+            }
+            
+            // 成交密集区
+            if (mainForceCostData['成交密集区'] && mainForceCostData['成交密集区'].length > 0) {
+                html += `<tr class="border-b border-border-color">
+                    <td class="p-2 font-medium text-purple-500">筹码峰</td>
+                    <td class="p-2 text-right" colspan="3">`;
+                mainForceCostData['成交密集区'].forEach((zone, idx) => {
+                    html += `<span class="inline-block mr-3 text-xs bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded">
+                        ${zone['价格区间']} (${zone['筹码占比']}%)
+                    </span>`;
+                });
+                html += `</td></tr>`;
+            }
+            
+            // 综合主力成本
+            if (mainForceCostData['综合主力成本']) {
+                const zh = mainForceCostData['综合主力成本'];
+                html += `<tr class="bg-blue-50 dark:bg-blue-900/20">
+                    <td class="p-2 font-bold text-blue-600">综合主力成本</td>
+                    <td class="p-2 text-right font-bold">${zh['成本区间'] ? zh['成本区间'][0] + ' - ' + zh['成本区间'][1] : '-'}</td>
+                    <td class="p-2 text-right font-bold text-lg">${zh['平均成本'] || '-'}</td>
+                    <td class="p-2 text-xs text-gray-400">${zh['计算依据'] || ''}</td>
+                </tr>`;
+            }
+            
+            html += `</tbody></table></div></div>`;
+            
+            // 主力盈利分析
+            if (mainForceCostData['主力盈利比例']) {
+                const yl = mainForceCostData['主力盈利比例'];
+                const profitNum = parseFloat(yl['盈利比例']) || 0;
+                let profitClass = profitNum > 50 ? 'text-red-500' : (profitNum > 0 ? 'text-yellow-500' : 'text-green-500');
+                
+                html += `<div class="card p-4 mb-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">主力盈利分析</h5>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">当前价格</div>
+                            <div class="text-lg font-bold">${yl['当前价格']}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">主力成本</div>
+                            <div class="text-lg font-bold">${yl['主力成本']}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">主力盈利</div>
+                            <div class="text-lg font-bold ${profitClass}">${yl['盈利比例']}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+            
+            // 行情阶段判断
+            if (mainForceCostData['行情阶段判断']) {
+                const jd = mainForceCostData['行情阶段判断'];
+                html += `<div class="card p-4 mb-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">行情阶段判断</h5>
+                    <div class="flex items-center gap-4">
+                        <div class="text-lg font-bold text-blue-500">${jd['阶段']}</div>
+                        <div class="text-sm text-gray-400">${jd['描述']}</div>
+                    </div>
+                </div>`;
+            }
+            
+            // 目标价推算
+            if (mainForceCostData['目标价推算']) {
+                const mb = mainForceCostData['目标价推算'];
+                html += `<div class="card p-4 mb-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">目标价推算</h5>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">普通行情</div>
+                            <div class="text-lg font-bold text-yellow-500">${mb['普通行情']}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">强势行情</div>
+                            <div class="text-lg font-bold text-orange-500">${mb['强势行情']}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">超级行情</div>
+                            <div class="text-lg font-bold text-red-500">${mb['超级行情']}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+            
+            // 洗盘区间
+            if (mainForceCostData['洗盘区间']) {
+                const xp = mainForceCostData['洗盘区间'];
+                html += `<div class="card p-4 mb-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">洗盘区间分析</h5>
+                    <div class="grid grid-cols-3 gap-4 mb-3">
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">正常洗盘区间</div>
+                            <div class="text-lg font-bold">${xp['正常洗盘'] ? xp['正常洗盘'][0] + ' - ' + xp['正常洗盘'][1] : '-'}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">极限洗盘位</div>
+                            <div class="text-lg font-bold text-yellow-500">${xp['极限洗盘'] || '-'}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">止损参考</div>
+                            <div class="text-lg font-bold text-red-500">${xp['止损参考'] || '-'}</div>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-400 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
+                        ⚠️ ${xp['说明'] || ''}
+                    </div>
+                </div>`;
+            }
+            
+            // 关闭主力成本区分析的div
+            html += `</div>`;
+            }
+        }
         
         console.log('生成的HTML:', html);
         fullDataTable.innerHTML = html;
@@ -4082,6 +4348,311 @@
         console.log('切换到主题:', newTheme);
         setTheme(newTheme);
     });
+    
+    // ========== 导出文本数据功能 ==========
+    const exportTextModal = document.getElementById('exportTextModal');
+    const exportTextContent = document.getElementById('exportTextContent');
+    const closeExportTextBtn = document.getElementById('closeExportTextBtn');
+    const closeExportTextBtn2 = document.getElementById('closeExportTextBtn2');
+    const copyExportTextBtn = document.getElementById('copyExportTextBtn');
+    const copySuccessTip = document.getElementById('copySuccessTip');
+    
+    // 显示导出文本模态框
+    function showExportTextModal() {
+        if (!currentAnalysisData.marketData) {
+            alert('请先获取股票数据');
+            return;
+        }
+        
+        const textContent = generateExportText();
+        exportTextContent.value = textContent;
+        exportTextModal.classList.remove('hidden');
+        copySuccessTip.classList.add('hidden');
+    }
+    
+    // 生成适合AI分析的文本格式
+    function generateExportText() {
+        const data = currentAnalysisData;
+        let text = '';
+        
+        // 标题
+        const stockName = data.marketData?.['名称'] || data.symbol || '未知';
+        text += `【${stockName} 股票数据分析】\n`;
+        text += `分析时间：${data.timestamp || new Date().toLocaleString('zh-CN')}\n`;
+        text += `股票代码：${data.symbol}\n\n`;
+        
+        // 分隔线
+        text += `${'='.repeat(50)}\n\n`;
+        
+        // 一、基础行情数据
+        text += `【一、基础行情数据】\n`;
+        text += `──────────────────────────────────────────────────\n`;
+        if (data.marketData) {
+            const basicKeys = Object.keys(data.marketData).filter(k => 
+                typeof data.marketData[k] !== 'object' && 
+                !['板块信息', '资金流向', '技术指标', '港股信息'].includes(k)
+            );
+            basicKeys.forEach(k => {
+                const val = data.marketData[k];
+                text += `${k}：${val}\n`;
+            });
+        }
+        text += '\n';
+        
+        // 二、板块信息
+        if (data.marketData?.['板块信息'] && Object.keys(data.marketData['板块信息']).length > 0) {
+            text += `【二、板块信息】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            Object.keys(data.marketData['板块信息']).forEach(k => {
+                text += `${k}：${data.marketData['板块信息'][k] || '-'}\n`;
+            });
+            text += '\n';
+        }
+        
+        // 三、资金流向数据
+        if (data.marketData?.['资金流向'] && Object.keys(data.marketData['资金流向']).length > 0) {
+            text += `【三、资金流向数据】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            text += `类型\t\t净流入(万元)\t流入(万元)\t流出(万元)\n`;
+            text += `──────\t\t──────────\t──────────\t──────────\n`;
+            
+            const mf = data.marketData['资金流向'];
+            text += `超大单\t\t${mf['超大单净流入'] || '-'}\t\t${mf['超大单流入'] || '-'}\t\t${mf['超大单流出'] || '-'}\n`;
+            text += `大单\t\t${mf['大单净流入'] || '-'}\t\t${mf['大单流入'] || '-'}\t\t${mf['大单流出'] || '-'}\n`;
+            text += `中单\t\t${mf['中单净流入'] || '-'}\t\t${mf['中单流入'] || '-'}\t\t${mf['中单流出'] || '-'}\n`;
+            text += `小单\t\t${mf['小单净流入'] || '-'}\t\t${mf['小单流入'] || '-'}\t\t${mf['小单流出'] || '-'}\n`;
+            text += `主力合计\t\t${mf['主力净流入'] || '-'}\t\t-\\t\t-\n`;
+            text += '\n';
+        }
+        
+        // 四、技术指标
+        if (data.marketData?.['技术指标'] && Object.keys(data.marketData['技术指标']).length > 0) {
+            text += `【四、技术指标】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            const ti = data.marketData['技术指标'];
+            
+            // EMA均线
+            if (ti['EMA5'] || ti['EMA10'] || ti['EMA20'] || ti['EMA30'] || ti['EMA60']) {
+                text += `均线系统：\n`;
+                text += `  EMA5：${ti['EMA5'] || '-'}\n`;
+                text += `  EMA10：${ti['EMA10'] || '-'}\n`;
+                text += `  EMA20：${ti['EMA20'] || '-'}\n`;
+                text += `  EMA30：${ti['EMA30'] || '-'}\n`;
+                text += `  EMA60：${ti['EMA60'] || '-'}\n`;
+                text += '\n';
+            }
+            
+            // RSI
+            if (ti['RSI14']) {
+                text += `RSI指标：\n`;
+                text += `  RSI14：${ti['RSI14'] || '-'}\n`;
+                let rsiStatus = '-';
+                const rsiVal = parseFloat(ti['RSI14']);
+                if (!isNaN(rsiVal)) {
+                    if (rsiVal > 70) rsiStatus = '超买';
+                    else if (rsiVal < 30) rsiStatus = '超卖';
+                    else rsiStatus = '正常';
+                }
+                text += `  状态：${rsiStatus}\n`;
+                text += '\n';
+            }
+            
+            // KDJ
+            if (ti['K'] || ti['D'] || ti['J']) {
+                text += `KDJ指标：\n`;
+                text += `  K值：${ti['K'] || '-'}\n`;
+                text += `  D值：${ti['D'] || '-'}\n`;
+                text += `  J值：${ti['J'] || '-'}\n`;
+                text += '\n';
+            }
+            
+            // 布林带
+            if (ti['布林带上轨'] || ti['布林带中轨'] || ti['布林带下轨']) {
+                text += `布林带：\n`;
+                text += `  上轨：${ti['布林带上轨'] || '-'}\n`;
+                text += `  中轨：${ti['布林带中轨'] || '-'}\n`;
+                text += `  下轨：${ti['布林带下轨'] || '-'}\n`;
+                text += `  价格位置：${ti['价格位置'] || '-'}\n`;
+                text += '\n';
+            }
+            
+            // MACD
+            if (ti['MACD_DIF'] || ti['MACD_DEA'] || ti['MACD柱']) {
+                text += `MACD指标：\n`;
+                text += `  DIF：${ti['MACD_DIF'] || '-'}\n`;
+                text += `  DEA：${ti['MACD_DEA'] || '-'}\n`;
+                text += `  MACD柱：${ti['MACD柱'] || '-'}\n`;
+                text += '\n';
+            }
+            
+            // CCI
+            if (ti['CCI']) {
+                text += `CCI指标：${ti['CCI'] || '-'}\n`;
+                let cciStatus = '-';
+                const cciVal = parseFloat(ti['CCI']);
+                if (!isNaN(cciVal)) {
+                    if (cciVal > 100) cciStatus = '超买';
+                    else if (cciVal < -100) cciStatus = '超卖';
+                    else cciStatus = '正常';
+                }
+                text += `  状态：${cciStatus}\n`;
+                text += '\n';
+            }
+        }
+        
+        // 四点五、主力成本区分析
+        if (data.mainForceCostData && data.mainForceCostData['综合主力成本']) {
+            text += `【主力成本区分析】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            const mfc = data.mainForceCostData;
+            
+            if (mfc['定增成本区']) {
+                text += `定增成本：${mfc['定增成本区']['价格区间'] ? mfc['定增成本区']['价格区间'][0] + ' - ' + mfc['定增成本区']['价格区间'][1] : '-'}，平均：${mfc['定增成本区']['平均成本'] || '-'}\n`;
+            }
+            if (mfc['主升浪启动区']) {
+                text += `主升浪启动区：${mfc['主升浪启动区']['价格区间'] ? mfc['主升浪启动区']['价格区间'][0] + ' - ' + mfc['主升浪启动区']['价格区间'][1] : '-'}，平均：${mfc['主升浪启动区']['平均成本'] || '-'}\n`;
+            }
+            if (mfc['成交密集区'] && mfc['成交密集区'].length > 0) {
+                text += `筹码峰：`;
+                mfc['成交密集区'].forEach((zone, idx) => {
+                    text += `${zone['价格区间']}(${zone['筹码占比']}%) `;
+                });
+                text += '\n';
+            }
+            if (mfc['综合主力成本']) {
+                text += `综合主力成本：${mfc['综合主力成本']['成本区间'] ? mfc['综合主力成本']['成本区间'][0] + ' - ' + mfc['综合主力成本']['成本区间'][1] : '-'}，平均：${mfc['综合主力成本']['平均成本'] || '-'}\n`;
+            }
+            if (mfc['主力盈利比例']) {
+                text += `主力盈利：${mfc['主力盈利比例']['盈利比例']}（当前价：${mfc['主力盈利比例']['当前价格']}，成本：${mfc['主力盈利比例']['主力成本']}）\n`;
+            }
+            if (mfc['行情阶段判断']) {
+                text += `行情阶段：${mfc['行情阶段判断']['阶段']}（${mfc['行情阶段判断']['描述']}）\n`;
+            }
+            if (mfc['目标价推算']) {
+                text += `目标价：普通${mfc['目标价推算']['普通行情']} / 强势${mfc['目标价推算']['强势行情']} / 超级${mfc['目标价推算']['超级行情']}\n`;
+            }
+            if (mfc['洗盘区间']) {
+                text += `洗盘区间：${mfc['洗盘区间']['正常洗盘'] ? mfc['洗盘区间']['正常洗盘'][0] + ' - ' + mfc['洗盘区间']['正常洗盘'][1] : '-'}，极限：${mfc['洗盘区间']['极限洗盘'] || '-'}，止损：${mfc['洗盘区间']['止损参考'] || '-'}\n`;
+            }
+            text += '\n';
+        }
+        
+        // 五、上证指数
+        if (data.indexData) {
+            text += `【五、上证指数】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            Object.keys(data.indexData).forEach(k => {
+                if (typeof data.indexData[k] !== 'object') {
+                    text += `${k}：${data.indexData[k]}\n`;
+                }
+            });
+            text += '\n';
+        }
+        
+        // 六、港股信息
+        if (data.marketData?.['港股信息']) {
+            text += `【六、港股信息】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            Object.keys(data.marketData['港股信息']).forEach(k => {
+                if (typeof data.marketData['港股信息'][k] !== 'object') {
+                    text += `${k}：${data.marketData['港股信息'][k]}\n`;
+                }
+            });
+            text += '\n';
+        }
+        
+        // 七、最新资讯
+        if (data.newsData && data.newsData.length > 0) {
+            text += `【七、最新资讯】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            data.newsData.forEach((news, index) => {
+                text += `${index + 1}. ${news.title}\n`;
+                text += `   时间：${news.time}\n`;
+                if (news.content) {
+                    text += `   内容：${news.content}\n`;
+                }
+                text += `   链接：${news.url}\n`;
+                text += '\n';
+            });
+        }
+        
+        // 八、用户持仓信息
+        text += `【八、用户持仓信息】\n`;
+        text += `──────────────────────────────────────────────────\n`;
+        if (data.shares && data.cost) {
+            text += `持有数量：${data.shares} 股/份\n`;
+            text += `可卖出数量：${data.sellable_shares || 0} 股/份\n`;
+            text += `持仓成本：${data.cost} 元\n`;
+        } else {
+            text += `持仓状态：空仓\n`;
+        }
+        text += `可用资金：${data.cash || 10000} 元\n`;
+        text += '\n';
+        
+        // 九、复盘数据
+        if (data.reviewData && data.reviewData.length > 0) {
+            text += `【九、复盘数据】\n`;
+            text += `──────────────────────────────────────────────────\n`;
+            data.reviewData.forEach((record, index) => {
+                const type = record.type === 'buy' ? '买入' : '卖出';
+                text += `${index + 1}. ${type}\n`;
+                text += `   价格：${record.price} 元\n`;
+                text += `   数量：${record.amount} 股/份\n`;
+                text += `   时间：${record.time}\n`;
+                text += `   剩余数量：${record.remaining || '-'}\n`;
+                text += '\n';
+            });
+        }
+        
+        // 结尾提示
+        text += `${'='.repeat(50)}\n`;
+        text += `\n提示：以上数据仅供分析参考，请结合市场环境、行业趋势等因素进行综合判断。\n`;
+        
+        return text;
+    }
+    
+    // 关闭导出文本模态框
+    function hideExportTextModal() {
+        exportTextModal.classList.add('hidden');
+    }
+    
+    // 事件监听
+    if (closeExportTextBtn) {
+        closeExportTextBtn.addEventListener('click', hideExportTextModal);
+    }
+    if (closeExportTextBtn2) {
+        closeExportTextBtn2.addEventListener('click', hideExportTextModal);
+    }
+    
+    // 点击模态框外部关闭
+    if (exportTextModal) {
+        exportTextModal.addEventListener('click', function(e) {
+            if (e.target === exportTextModal) {
+                hideExportTextModal();
+            }
+        });
+    }
+    
+    // 一键复制功能
+    if (copyExportTextBtn) {
+        copyExportTextBtn.addEventListener('click', async function() {
+            try {
+                await navigator.clipboard.writeText(exportTextContent.value);
+                copySuccessTip.classList.remove('hidden');
+                setTimeout(() => {
+                    copySuccessTip.classList.add('hidden');
+                }, 2000);
+            } catch (err) {
+                // 降级方案：使用传统复制方法
+                exportTextContent.select();
+                document.execCommand('copy');
+                copySuccessTip.classList.remove('hidden');
+                setTimeout(() => {
+                    copySuccessTip.classList.add('hidden');
+                }, 2000);
+            }
+        });
+    }
 </script>
 </body>
 </html>

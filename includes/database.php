@@ -212,7 +212,7 @@ class Database {
     }
     
     // 保存股票分析记录
-    public static function saveStockAnalysis($userId, $symbol, $shares, $sellable_shares, $cost, $cash, $model, $marketData, $indexData, $newsData, $aiContent, $sectorData = null, $moneyFlowData = null, $technicalData = null, $reviewData = null, $fundDirectorContent = null, $minuteData = null, $analysisId = 0) {
+    public static function saveStockAnalysis($userId, $symbol, $shares, $sellable_shares, $cost, $cash, $model, $marketData, $indexData, $newsData, $aiContent, $sectorData = null, $moneyFlowData = null, $technicalData = null, $reviewData = null, $fundDirectorContent = null, $minuteData = null, $mainForceCostData = null, $analysisId = 0) {
         $conn = self::getConnection();
         $userId = (int)$userId;
         $symbol = $conn->real_escape_string($symbol);
@@ -231,6 +231,7 @@ class Database {
         $reviewData = $reviewData ? $conn->real_escape_string($reviewData) : null;
         $fundDirectorContent = $fundDirectorContent ? $conn->real_escape_string($fundDirectorContent) : null;
         $minuteData = $minuteData ? $conn->real_escape_string($minuteData) : null;
+        $mainForceCostData = $mainForceCostData ? $conn->real_escape_string($mainForceCostData) : null;
         $analysisId = (int)$analysisId;
         
         // 检查新字段是否存在
@@ -242,6 +243,7 @@ class Database {
         $hasFundDirectorColumn = self::checkColumnExists('stock_analyses', 'fund_director_content');
         $hasMinuteColumn = self::checkColumnExists('stock_analyses', 'minute_data');
         $hasSellableSharesColumn = self::checkColumnExists('stock_analyses', 'sellable_shares');
+        $hasMainForceCostColumn = self::checkColumnExists('stock_analyses', 'main_force_cost_data');
         
         // 如果提供了分析ID，只更新决策内容字段
         if ($analysisId > 0) {
@@ -299,6 +301,10 @@ class Database {
             if ($hasMinuteColumn && $minuteData) {
                 $columns[] = 'minute_data';
                 $values[] = "'$minuteData'";
+            }
+            if ($hasMainForceCostColumn && $mainForceCostData) {
+                $columns[] = 'main_force_cost_data';
+                $values[] = "'$mainForceCostData'";
             }
             
             $sql = "INSERT INTO stock_analyses (" . implode(', ', $columns) . ") 

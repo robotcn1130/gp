@@ -111,6 +111,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 technical_data TEXT DEFAULT NULL COMMENT '技术指标数据',
                 review_data TEXT DEFAULT NULL COMMENT '复盘数据',
                 minute_data TEXT DEFAULT NULL COMMENT '分时图数据',
+                main_force_cost_data TEXT DEFAULT NULL COMMENT '主力成本区数据',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )";
@@ -237,6 +238,26 @@ define('SYSTEM_INSTALLED', true);
 EOF;
             
             file_put_contents($configFile, $configContent);
+            
+            // 自动添加新字段（如果不存在）
+            $newColumns = [
+                'sellable_shares' => "INT DEFAULT 0",
+                'model' => "VARCHAR(50) DEFAULT 'deepseek-chat'",
+                'fund_director_content' => "TEXT DEFAULT NULL",
+                'sector_data' => "TEXT DEFAULT NULL",
+                'moneyflow_data' => "TEXT DEFAULT NULL",
+                'technical_data' => "TEXT DEFAULT NULL",
+                'review_data' => "TEXT DEFAULT NULL",
+                'minute_data' => "TEXT DEFAULT NULL",
+                'main_force_cost_data' => "TEXT DEFAULT NULL"
+            ];
+            
+            foreach ($newColumns as $column => $definition) {
+                $checkColumn = $conn->query("SHOW COLUMNS FROM stock_analyses LIKE '$column'");
+                if ($checkColumn->num_rows == 0) {
+                    $conn->query("ALTER TABLE stock_analyses ADD COLUMN $column $definition");
+                }
+            }
             
             // 关闭连接
             $conn->close();

@@ -586,18 +586,47 @@ if (empty($apiKey)) {
 
 // 判断是否是开放式基金（非ETF、非LOF、非股票）
 function isOpenEndFund($code) {
-    // 清理市场前缀
     $cleanCode = preg_replace('/[a-z]/i', '', $code);
     if (strlen($cleanCode) !== 6) return false;
     
-    $first = substr($cleanCode, 0, 1);
-    // 0/1/2/3 开头的通常是开放式基金
-    // 5/6/9 开头的是上海市场（股票/ETF）
-    // 1/2/3 开头的是深圳市场（股票/ETF/LOF）
-    // 这里简化判断：不是5/6/9/0开头的6位代码可能是开放式基金
-    // 或者更简单的：判断代码是否是00/01/02/03/04/05/06/07/08/09/10/11/12/15/16/18/20/21/24/25/26/27/29/31/32/34/36/37/39/40/42/45/46/47/48/50/51/53/54/55/56/57/58/59/61/62/63/66/67/68/69/70/71/72/73/74/75/76/77/78/79/80/81/82/85/86/87/88/89/90/91/92/93/95/96/97/98/99开头
     $prefix = substr($cleanCode, 0, 2);
-    $openFundPrefixes = ['00','01','02','03','04','05','06','07','08','09','10','11','12','15','16','18','20','21','24','25','26','27','29','31','32','34','36','37','39','40','42','45','46','47','48','50','51','53','54','55','56','57','58','59','61','62','63','66','67','68','69','70','71','72','73','74','75','76','77','78','79','80','81','82','85','86','87','88','89','90','91','92','93','95','96','97','98','99'];
+    $prefix3 = substr($cleanCode, 0, 3);
+    
+    $stockPrefixes = [
+        '000', '001', '002', '003',
+        '300', '301', '302', '303',
+        '600', '601', '603', '605',
+        '688', '689',
+        '430', '830', '831', '832', '833', '834', '835', '836', '837', '838', '839', '840', '841', '842', '843', '844', '845', '846', '847', '848', '849', '850', '851', '852', '853', '854', '855', '856', '857', '858', '859', '860', '861', '862', '863', '864', '865', '866', '867', '868', '869', '870', '871', '872', '873', '878', '889', '900'
+    ];
+    
+    foreach ($stockPrefixes as $sp) {
+        if (strpos($cleanCode, $sp) === 0) {
+            return false;
+        }
+    }
+    
+    $etfLofPrefixes = [
+        '50', '51', '52', '56', '58',
+        '15', '16', '17', '18'
+    ];
+    if (in_array($prefix, $etfLofPrefixes)) {
+        return false;
+    }
+    
+    $openFundPrefixes = [
+        '00', '01', '02', '03', '04', '05', '06', '07', '08', '09',
+        '10', '11', '12', '13', '14', '19',
+        '20', '21', '22', '23', '24', '25', '26', '27', '28', '29',
+        '30', '31', '32', '33', '34', '35', '36', '37', '38', '39',
+        '40', '41', '42', '43', '44', '45', '46', '47', '48', '49',
+        '53', '54', '55', '57', '59',
+        '60', '61', '62', '63', '64', '65', '66', '67', '68', '69',
+        '70', '71', '72', '73', '74', '75', '76', '77', '78', '79',
+        '80', '81', '82', '83', '84', '85', '86', '87', '88', '89',
+        '90', '91', '92', '93', '94', '95', '96', '97', '98', '99'
+    ];
+    
     return in_array($prefix, $openFundPrefixes);
 }
 
@@ -1309,6 +1338,373 @@ function calculateCCI($highs, $lows, $closes, $period = 14) {
 }
 
 /**
+ * 获取股票定增数据
+ * 从东方财富获取定向增发数据，包括定增价格、解禁时间等
+ * 使用股票名称搜索
+ */
+function getPrivatePlacementData($stockName) {
+    $placementData = [];
+    try {
+        if (empty($stockName)) {
+            return $placementData;
+        }
+        
+        $encodedName = urlencode($stockName);
+        $url = "https://datacenter-web.eastmoney.com/api/data/v1/get?callback=jQuery_callback&sortColumns=ISSUE_DATE&sortTypes=-1&pageSize=50&pageNumber=1&reportName=RPT_SEO_DETAIL&columns=ALL&quoteColumns=f2~01~SECURITY_CODE~NEW_PRICE&quoteType=0&source=WEB&client=WEB&filter=(SECURITY_NAME_ABBR+like+%22%25{$encodedName}%25%22)";
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        curl_setopt($ch, CURLOPT_REFERER, "https://data.eastmoney.com/");
+        
+        $raw = curl_exec($ch);
+        curl_close($ch);
+        
+        if ($raw) {
+            if (preg_match('/jQuery_callback\((.*)\)/', $raw, $matches)) {
+                $jsonStr = $matches[1];
+                $data = json_decode($jsonStr, true);
+                if ($data && isset($data['result']['data'])) {
+                    foreach ($data['result']['data'] as $item) {
+                        $placementData[] = [
+                            '定增价格' => $item['ISSUE_PRICE'] ?? null,
+                            '发行数量' => $item['ISSUE_NUM'] ?? null,
+                            '发行对象' => $item['ISSUE_OBJECT'] ?? null,
+                            '发行日期' => $item['ISSUE_DATE'] ?? null,
+                            '上市日期' => $item['ISSUE_LISTING_DATE'] ?? null,
+                            '锁定期' => $item['LOCKIN_PERIOD'] ?? null,
+                            '发行方式' => $item['ISSUE_WAY'] ?? null,
+                            '增发类型' => $item['SEO_TYPE'] ?? null,
+                            '募集资金总额' => $item['TOTAL_RAISE_FUNDS'] ?? null,
+                            '净募集资金' => $item['NET_RAISE_FUNDS'] ?? null,
+                            '发行前股本' => $item['ISSUE_SHARE_BEFORE'] ?? null,
+                            '发行后股本' => $item['ISSUE_SHARE_AFTER'] ?? null,
+                            '当前价格' => $item['NEW_PRICE'] ?? null,
+                            '股票代码' => $item['SECURITY_CODE'] ?? null,
+                            '股票名称' => $item['SECURITY_NAME_ABBR'] ?? null
+                        ];
+                    }
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log('获取定增数据失败: ' . $e->getMessage());
+    }
+    return $placementData;
+}
+
+/**
+ * 计算筹码分布（基于K线数据）
+ * 使用成交量加权方法估算筹码分布
+ */
+function calculateChipDistribution($klineData, $currentPrice) {
+    if (empty($klineData) || !$currentPrice) {
+        return [];
+    }
+    
+    $chipDistribution = [];
+    $priceRanges = [];
+    
+    $allPrices = [];
+    foreach ($klineData as $kline) {
+        $allPrices[] = $kline['low'];
+        $allPrices[] = $kline['high'];
+    }
+    
+    if (empty($allPrices)) return [];
+    
+    $minPrice = min($allPrices);
+    $maxPrice = max($allPrices);
+    
+    if ($maxPrice <= $minPrice) return [];
+    
+    $priceStep = ($maxPrice - $minPrice) / 20;
+    if ($priceStep <= 0) return [];
+    
+    for ($i = 0; $i <= 20; $i++) {
+        $rangeStart = $minPrice + $i * $priceStep;
+        $rangeEnd = $rangeStart + $priceStep;
+        $priceRanges[round($rangeStart, 2) . '-' . round($rangeEnd, 2)] = [
+            'start' => $rangeStart,
+            'end' => $rangeEnd,
+            'volume' => 0,
+            'amount' => 0
+        ];
+    }
+    
+    foreach ($klineData as $kline) {
+        $high = $kline['high'];
+        $low = $kline['low'];
+        $volume = $kline['volume'];
+        $amount = $kline['amount'];
+        
+        if ($high <= $low) {
+            $high = $low + 0.01;
+        }
+        
+        foreach ($priceRanges as $key => &$range) {
+            if ($low <= $range['end'] && $high >= $range['start']) {
+                $overlapStart = max($low, $range['start']);
+                $overlapEnd = min($high, $range['end']);
+                $overlapRatio = ($overlapEnd - $overlapStart) / ($high - $low);
+                
+                $range['volume'] += $volume * $overlapRatio;
+                $range['amount'] += $amount * $overlapRatio;
+            }
+        }
+    }
+    
+    $totalVolume = array_sum(array_column($priceRanges, 'volume'));
+    $totalAmount = array_sum(array_column($priceRanges, 'amount'));
+    
+    if ($totalVolume <= 0 || $totalAmount <= 0) return [];
+    
+    foreach ($priceRanges as $key => $range) {
+        $avgPrice = $range['volume'] > 0 ? $range['amount'] / $range['volume'] : ($range['start'] + $range['end']) / 2;
+        $chipDistribution[] = [
+            '价格区间' => $key,
+            '成交量占比' => round($range['volume'] / $totalVolume * 100, 2),
+            '成交额占比' => round($range['amount'] / $totalAmount * 100, 2),
+            '平均价格' => round($avgPrice, 2),
+            '成交量' => round($range['volume'], 0),
+            '成交额' => round($range['amount'], 0)
+        ];
+    }
+    
+    usort($chipDistribution, function($a, $b) {
+        return $b['成交量占比'] <=> $a['成交量占比'];
+    });
+    
+    return $chipDistribution;
+}
+
+/**
+ * 推算主力成本区
+ * 综合三种方法：定增成本、主升浪启动区、成交密集区
+ */
+function calculateMainForceCostZone($klineData, $currentPrice, $placementData = []) {
+    $costAnalysis = [
+        '定增成本区' => null,
+        '主升浪启动区' => null,
+        '成交密集区' => null,
+        '综合主力成本' => null,
+        '主力盈利比例' => null,
+        '目标价推算' => null,
+        '行情阶段判断' => null,
+        '洗盘区间' => null
+    ];
+    
+    if (empty($klineData) || !$currentPrice) {
+        return $costAnalysis;
+    }
+    
+    $closes = array_column($klineData, 'close');
+    $highs = array_column($klineData, 'high');
+    $lows = array_column($klineData, 'low');
+    $volumes = array_column($klineData, 'volume');
+    $n = count($closes);
+    
+    if ($n < 10) return $costAnalysis;
+    
+    $sixMonthsAgo = date('Y-m-d', strtotime('-6 months'));
+    $validPlacements = [];
+    $validPlacementPrices = [];
+    
+    if (!empty($placementData)) {
+        foreach ($placementData as $p) {
+            if (empty($p['定增价格']) || $p['定增价格'] <= 0) continue;
+            
+            $listingDate = $p['上市日期'] ?? $p['发行日期'] ?? null;
+            if (empty($listingDate)) continue;
+            
+            $listingDateStr = is_numeric($listingDate) ? date('Y-m-d', ($listingDate - 25569) * 86400) : substr($listingDate, 0, 10);
+            
+            $lockPeriod = $p['锁定期'] ?? '';
+            $maxLockMonths = 0;
+            if (!empty($lockPeriod)) {
+                if (preg_match('/(\d+(?:\.\d+)?)\s*年/', $lockPeriod, $matches)) {
+                    $years = floatval(end($matches));
+                    $maxLockMonths = max($maxLockMonths, $years * 12);
+                }
+                if (preg_match_all('/(\d+(?:\.\d+)?)/', $lockPeriod, $matches)) {
+                    foreach ($matches[1] as $num) {
+                        if (strpos($lockPeriod, '年') !== false) {
+                            $maxLockMonths = max($maxLockMonths, floatval($num) * 12);
+                        } elseif (strpos($lockPeriod, '月') !== false) {
+                            $maxLockMonths = max($maxLockMonths, floatval($num));
+                        }
+                    }
+                }
+                if (strpos($lockPeriod, '年') !== false && $maxLockMonths == 0) {
+                    if (preg_match('/(\d+(?:\.\d+)?)/', $lockPeriod, $m)) {
+                        $maxLockMonths = floatval($m[1]) * 12;
+                    }
+                }
+            }
+            
+            $unlockDate = date('Y-m-d', strtotime($listingDateStr . " +{$maxLockMonths} months"));
+            
+            if ($unlockDate >= $sixMonthsAgo) {
+                $p['解禁日期'] = $unlockDate;
+                $p['计算锁定期'] = $maxLockMonths . '个月';
+                $validPlacements[] = $p;
+                $validPlacementPrices[] = $p['定增价格'];
+            }
+        }
+        
+        if (!empty($validPlacements)) {
+            $minPlacement = min($validPlacementPrices);
+            $maxPlacement = max($validPlacementPrices);
+            
+            $costAnalysis['定增成本区'] = [
+                '价格区间' => [$minPlacement, $maxPlacement],
+                '平均成本' => round(array_sum($validPlacementPrices) / count($validPlacementPrices), 2),
+                '定增次数' => count($validPlacements),
+                '详情' => array_slice($validPlacements, 0, 3)
+            ];
+        }
+    }
+    
+    $avgVolume = array_sum($volumes) / $n;
+    $volumeThreshold = $avgVolume * 1.5;
+    
+    $breakoutPoints = [];
+    for ($i = 5; $i < $n; $i++) {
+        if ($volumes[$i] > $volumeThreshold) {
+            $prevAvg = array_sum(array_slice($closes, $i - 5, 5)) / 5;
+            if ($closes[$i] > $prevAvg * 1.03) {
+                $breakoutPoints[] = [
+                    'index' => $i,
+                    'price' => $closes[$i],
+                    'volume' => $volumes[$i]
+                ];
+            }
+        }
+    }
+    
+    if (!empty($breakoutPoints)) {
+        $recentBreakouts = array_slice($breakoutPoints, -3);
+        $breakoutPrices = array_column($recentBreakouts, 'price');
+        $minBreakout = min($breakoutPrices);
+        $maxBreakout = max($breakoutPrices);
+        
+        $costAnalysis['主升浪启动区'] = [
+            '价格区间' => [round($minBreakout * 0.95, 2), round($maxBreakout * 1.05, 2)],
+            '平均成本' => round(array_sum($breakoutPrices) / count($breakoutPrices), 2),
+            '启动次数' => count($recentBreakouts)
+        ];
+    }
+    
+    $chipDistribution = calculateChipDistribution($klineData, $currentPrice);
+    if (!empty($chipDistribution)) {
+        $topChips = array_slice($chipDistribution, 0, 3);
+        $denseZones = [];
+        
+        foreach ($topChips as $chip) {
+            $priceRange = explode('-', $chip['价格区间']);
+            if (count($priceRange) == 2) {
+                $denseZones[] = [
+                    '价格区间' => $chip['价格区间'],
+                    '筹码占比' => $chip['成交量占比'],
+                    '平均价格' => $chip['平均价格']
+                ];
+            }
+        }
+        
+        $costAnalysis['成交密集区'] = $denseZones;
+    }
+    
+    $costPoints = [];
+    
+    if (!empty($validPlacementPrices)) {
+        $avgValidPlacement = array_sum($validPlacementPrices) / count($validPlacementPrices);
+        $costPoints[] = $avgValidPlacement;
+    }
+    
+    if (!empty($costAnalysis['主升浪启动区'])) {
+        $costPoints[] = $costAnalysis['主升浪启动区']['平均成本'];
+    }
+    
+    if (!empty($costAnalysis['成交密集区'])) {
+        foreach ($costAnalysis['成交密集区'] as $zone) {
+            if ($zone['平均价格'] < $currentPrice * 0.9) {
+                $costPoints[] = $zone['平均价格'];
+            }
+        }
+    }
+    
+    if (!empty($costPoints)) {
+        $avgCost = array_sum($costPoints) / count($costPoints);
+        $minCost = min($costPoints);
+        $maxCost = max($costPoints);
+        
+        $costBasis = [];
+        if (!empty($validPlacementPrices)) $costBasis[] = '近6月定增';
+        if (!empty($costAnalysis['主升浪启动区'])) $costBasis[] = '主升浪启动';
+        if (!empty($costAnalysis['成交密集区'])) $costBasis[] = '筹码峰';
+        
+        $costAnalysis['综合主力成本'] = [
+            '成本区间' => [round($minCost, 2), round($maxCost, 2)],
+            '平均成本' => round($avgCost, 2),
+            '计算依据' => count($costPoints) . '个成本点（' . implode('+', $costBasis) . '）'
+        ];
+        
+        if ($avgCost > 0) {
+            $profitRatio = ($currentPrice - $avgCost) / $avgCost * 100;
+            $costAnalysis['主力盈利比例'] = [
+                '盈利比例' => round($profitRatio, 2) . '%',
+                '当前价格' => $currentPrice,
+                '主力成本' => round($avgCost, 2)
+            ];
+            
+            $costAnalysis['目标价推算'] = [
+                '普通行情' => round($avgCost * 1.5, 2),
+                '强势行情' => round($avgCost * 2.0, 2),
+                '超级行情' => round($avgCost * 3.0, 2)
+            ];
+            
+            if ($profitRatio < 30) {
+                $stage = '底部吸筹/建仓期';
+                $stageDesc = '主力利润较低，处于建仓或吸筹阶段';
+            } elseif ($profitRatio < 50) {
+                $stage = '主升浪初期';
+                $stageDesc = '主力利润适中，刚进入主升浪阶段';
+            } elseif ($profitRatio < 80) {
+                $stage = '主升浪中期';
+                $stageDesc = '主力利润较高，处于主升浪中段';
+            } elseif ($profitRatio < 150) {
+                $stage = '主升浪后期';
+                $stageDesc = '主力利润很高，可能即将进入派发阶段';
+            } else {
+                $stage = '高位派发期';
+                $stageDesc = '主力利润极高，需警惕派发风险';
+            }
+            
+            $costAnalysis['行情阶段判断'] = [
+                '阶段' => $stage,
+                '描述' => $stageDesc,
+                '主力利润' => round($profitRatio, 2) . '%'
+            ];
+            
+            $washLow = round($currentPrice * 0.92, 2);
+            $washHigh = round($currentPrice * 0.98, 2);
+            $limitWash = round($avgCost * 1.1, 2);
+            
+            $costAnalysis['洗盘区间'] = [
+                '正常洗盘' => [$washLow, $washHigh],
+                '极限洗盘' => round($limitWash, 2),
+                '止损参考' => round($avgCost * 1.05, 2),
+                '说明' => '如果跌破极限洗盘位，行情可能结束'
+            ];
+        }
+    }
+    
+    return $costAnalysis;
+}
+
+/**
  * 获取股票分时图数据
  */
 function getMinuteData($fullCode) {
@@ -1678,7 +2074,51 @@ try {
 }
 
 // 发送进度信息：技术指标计算完成，正在获取股票最新资讯...
-sendProgress(50, '技术指标计算完成，正在获取股票最新资讯...');
+sendProgress(50, '技术指标计算完成，正在获取主力成本区数据...');
+
+// 获取主力成本区数据（需要用户勾选或只获取数据模式）
+$mainForceCostData = [];
+$mainForceCostDebug = '';
+$enableMainForceCost = isset($_POST['enableMainForceCost']) && $_POST['enableMainForceCost'] === 'true';
+$dataOnlyMode = isset($_POST['dataOnly']) && $_POST['dataOnly'] === 'true';
+
+if (!$enableMainForceCost && !$dataOnlyMode) {
+    $mainForceCostDebug = '未启用主力成本区分析（请勾选选项或使用只获取数据模式）';
+} elseif (isOpenEndFund($fullCode)) {
+    $mainForceCostDebug = '开放式基金不支持主力成本区分析';
+} else {
+    try {
+        $stockNameForPlacement = $marketData['名称'] ?? '';
+        if (empty($stockNameForPlacement)) {
+            $mainForceCostDebug = '无法获取股票名称';
+        } elseif (empty($klineData) || count($klineData) < 10) {
+            $mainForceCostDebug = 'K线数据不足（需要至少10条数据，当前：' . count($klineData) . '条）';
+        } elseif (empty($currentPrice)) {
+            $mainForceCostDebug = '无法获取当前价格';
+        } else {
+            $placementData = getPrivatePlacementData($stockNameForPlacement);
+            $mainForceCostData = calculateMainForceCostZone($klineData, $currentPrice, $placementData);
+            
+            if (empty($mainForceCostData['综合主力成本'])) {
+                $debugParts = [];
+                if (empty($mainForceCostData['主升浪启动区'])) $debugParts[] = '无主升浪启动点';
+                if (empty($mainForceCostData['成交密集区'])) $debugParts[] = '无成交密集区';
+                $mainForceCostDebug = '无法计算综合主力成本：' . implode('、', $debugParts) . '（需要至少一个有效成本点）';
+            }
+        }
+    } catch (Exception $e) {
+        error_log('获取主力成本区数据失败: ' . $e->getMessage());
+        $mainForceCostDebug = '计算失败：' . $e->getMessage();
+        $mainForceCostData = [];
+    }
+}
+
+if (!empty($mainForceCostDebug)) {
+    $mainForceCostData['_debug_info'] = $mainForceCostDebug;
+}
+
+// 发送进度信息：主力成本区数据获取完成，正在获取股票最新资讯...
+sendProgress(52, '主力成本区数据获取完成，正在获取股票最新资讯...');
 
 // 获取股票最新资讯列表（可能失败）
 $stockNews = [];
@@ -1698,12 +2138,28 @@ $enhancedMarketData = array_merge($marketData, [
     '板块信息' => $sectorData,
     '资金流向' => $moneyFlowData,
     '技术指标' => $technicalIndicators,
-    '港股信息' => $hkData
+    '港股信息' => $hkData,
+    '主力成本区' => $mainForceCostData
 ]);
 
 // 1. 发送行情数据表格给前端
-echo "DATA:" . json_encode(['stockData' => $enhancedMarketData, 'indexData' => $shIndexData, 'newsData' => $stockNews, 'hkData' => $hkData], JSON_UNESCAPED_UNICODE) . "\n";
+echo "DATA:" . json_encode(['stockData' => $enhancedMarketData, 'indexData' => $shIndexData, 'newsData' => $stockNews, 'hkData' => $hkData, 'mainForceCostData' => $mainForceCostData], JSON_UNESCAPED_UNICODE) . "\n";
 sseFlush();
+
+// 检查是否是"只获取数据"模式
+$dataOnly = isset($_POST['dataOnly']) && $_POST['dataOnly'] === 'true';
+
+if ($dataOnly) {
+    // 只获取数据模式，不进行AI分析
+    sendProgress(100, '数据获取完成！（已跳过AI分析）');
+    echo "PROGRESS:" . json_encode(['percentage' => 100, 'message' => '数据获取完成！', 'hide' => true], JSON_UNESCAPED_UNICODE) . "\n";
+    sseFlush();
+    
+    // 不扣除积分（只获取数据模式不消耗积分）
+    // 不保存分析记录到数据库
+    
+    exit;
+}
 
 // 发送进度信息：开始AI分析
 sendProgress(60, '正在发送请求给AI进行分析...');
@@ -1736,6 +2192,11 @@ if (!empty($minuteData)) {
 }
 // 构建最新资讯和详细资讯
 $userPrompt .= "8. 最新资讯：" . json_encode($stockNews, JSON_UNESCAPED_UNICODE) . "\n";
+
+// 添加主力成本区数据
+if (!empty($mainForceCostData)) {
+    $userPrompt .= "9. 主力成本区分析数据：" . json_encode($mainForceCostData, JSON_UNESCAPED_UNICODE) . "\n";
+}
 
 // 添加近两日包含股票名称或代码的资讯详情
 $hasNewsContent = false;
@@ -1799,9 +2260,23 @@ $userPrompt .= "13. 如果股票今日跌停或涨停，请分析第二日连板
 $userPrompt .= "14. 如果股票今日没有跌停或涨停，请给出第二日的涨跌预测\n";
 $userPrompt .= "15. 请根据用户的交易风格（{$tradingStyle}）和持仓风格（{$holdingStyle}）调整分析建议的激进程度和持仓周期建议\n";
 
+// 如果有主力成本区数据，添加主力成本区分析要求
+if (!empty($mainForceCostData)) {
+    $userPrompt .= "16. 请深入分析主力成本区数据，包括以下内容（创建独立的分析板块）：\n";
+    $userPrompt .= "   a. 定增成本分析：如果有定增数据，分析机构定增成本与当前价格的差距，判断机构盈亏情况\n";
+    $userPrompt .= "   b. 主升浪启动区分析：识别本轮行情的启动位置，推算主力建仓成本\n";
+    $userPrompt .= "   c. 筹码分布分析：分析成交密集区（筹码峰），判断筹码集中度\n";
+    $userPrompt .= "   d. 综合主力成本推算：结合三种方法估算机构真实成本区间\n";
+    $userPrompt .= "   e. 主力盈利分析：计算当前主力盈利比例，判断行情所处阶段（建仓期/主升浪初期/中期/后期/派发期）\n";
+    $userPrompt .= "   f. 目标价推算：基于主力成本推算普通行情、强势行情、超级行情的目标价\n";
+    $userPrompt .= "   g. 洗盘区间分析：给出正常洗盘区间和极限洗盘位，以及止损参考\n";
+    $userPrompt .= "   h. 投资建议：基于主力成本分析给出具体的操作建议\n";
+}
+
 // 如果有选择战法，添加战法分析要求
 if (!empty($selectedStrategies)) {
-    $userPrompt .= "16. 请针对以下选定的战法进行单独分析，每个战法分析一个板块：\n";
+    $strategyIndex = !empty($mainForceCostData) ? 17 : 16;
+    $userPrompt .= $strategyIndex . ". 请针对以下选定的战法进行单独分析，每个战法分析一个板块：\n";
     foreach ($selectedStrategies as $index => $strategy) {
         $userPrompt .= ($index + 1) . ". {$strategy}\n";
     }
@@ -1814,7 +2289,10 @@ if (!empty($selectedStrategies)) {
 
 // 如果有复盘数据，添加复盘分析要求
 if (!empty($parsedReviewData)) {
-    $userPrompt .= "17. 请根据用户提供的复盘数据，结合当日的分时图、成交量、MA5/MA10、RSI、MACD、板块涨跌幅和大盘走势等数据，进行全面分析：\n";
+    $reviewIndex = 17;
+    if (!empty($mainForceCostData)) $reviewIndex++;
+    if (!empty($selectedStrategies)) $reviewIndex++;
+    $userPrompt .= $reviewIndex . ". 请根据用户提供的复盘数据，结合当日的分时图、成交量、MA5/MA10、RSI、MACD、板块涨跌幅和大盘走势等数据，进行全面分析：\n";
     $userPrompt .= "   a. 是否符合趋势结构\n";
     $userPrompt .= "   b. 是否属于情绪化操作\n";
     $userPrompt .= "   c. 盈亏比是否合理\n";
@@ -1902,7 +2380,8 @@ $analysisId = Database::saveStockAnalysis(
     json_encode($technicalIndicators),
     json_encode($parsedReviewData),
     null, // fund_director_content
-    json_encode($minuteData)
+    json_encode($minuteData),
+    json_encode($mainForceCostData)
 );
 logDebug('保存分析记录结果: ' . ($analysisId ? '成功，ID: ' . $analysisId : '失败'), $user['id']);
 
