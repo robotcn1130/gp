@@ -3157,54 +3157,75 @@
                 </div>`;
             } else if (mainForceCostData['综合主力成本']) {
                 html += `<div class="mb-6">
-                    <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 主力成本区分析</h4>
+                    <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 主力成本区分析 V2.0</h4>
                     <div class="card p-4 mb-4">
-                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">主力成本推算（三种方法交叉估算）</h5>
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">主力成本推算（多层成本结构模型）</h5>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead>
                                     <tr class="border-b border-border-color">
-                                        <th class="text-left p-2 text-gray-400">分析方法</th>
-                                        <th class="text-right p-2 text-gray-400">成本区间</th>
-                                        <th class="text-right p-2 text-gray-400">平均成本</th>
+                                        <th class="text-left p-2 text-gray-400">成本类型</th>
+                                        <th class="text-right p-2 text-gray-400">成本值</th>
+                                        <th class="text-right p-2 text-gray-400">权重</th>
                                         <th class="text-left p-2 text-gray-400">说明</th>
                                     </tr>
                                 </thead>
                                 <tbody>`;
             
-            // 定增成本区
-            if (mainForceCostData['定增成本区']) {
-                const dz = mainForceCostData['定增成本区'];
+            // 机构成本（原定增成本区）
+            if (mainForceCostData['机构成本']) {
+                const jg = mainForceCostData['机构成本'];
                 html += `<tr class="border-b border-border-color">
-                    <td class="p-2 font-medium text-blue-500">定增成本</td>
-                    <td class="p-2 text-right">${dz['价格区间'] ? dz['价格区间'][0] + ' - ' + dz['价格区间'][1] : '-'}</td>
-                    <td class="p-2 text-right font-bold">${dz['平均成本'] || '-'}</td>
-                    <td class="p-2 text-xs text-gray-400">定增次数: ${dz['定增次数'] || 0}次</td>
+                    <td class="p-2 font-medium text-blue-500">机构成本</td>
+                    <td class="p-2 text-right font-bold">${jg['定增加权成本'] || '-'}</td>
+                    <td class="p-2 text-right text-orange-500 font-bold">35%</td>
+                    <td class="p-2 text-xs text-gray-400">定增次数: ${jg['定增次数'] || 0}次 | ${jg['计算公式'] || ''}</td>
                 </tr>`;
             }
             
-            // 主升浪启动区
-            if (mainForceCostData['主升浪启动区']) {
-                const qs = mainForceCostData['主升浪启动区'];
+            // VWAP成本（新增）
+            if (mainForceCostData['VWAP成本']) {
+                const vwap = mainForceCostData['VWAP成本'];
                 html += `<tr class="border-b border-border-color">
-                    <td class="p-2 font-medium text-green-500">主升浪启动区</td>
-                    <td class="p-2 text-right">${qs['价格区间'] ? qs['价格区间'][0] + ' - ' + qs['价格区间'][1] : '-'}</td>
-                    <td class="p-2 text-right font-bold">${qs['平均成本'] || '-'}</td>
-                    <td class="p-2 text-xs text-gray-400">放量突破次数: ${qs['启动次数'] || 0}次</td>
+                    <td class="p-2 font-medium text-cyan-500">VWAP成本</td>
+                    <td class="p-2 text-right font-bold">${vwap['综合VWAP'] || '-'}</td>
+                    <td class="p-2 text-right text-orange-500 font-bold">25%</td>
+                    <td class="p-2 text-xs text-gray-400">60日: ${vwap['VWAP60'] || '-'} | 120日: ${vwap['VWAP120'] || '-'}</td>
                 </tr>`;
             }
             
-            // 成交密集区
-            if (mainForceCostData['成交密集区'] && mainForceCostData['成交密集区'].length > 0) {
+            // 筹码成本（原成交密集区）
+            if (mainForceCostData['筹码成本']) {
+                const cm = mainForceCostData['筹码成本'];
                 html += `<tr class="border-b border-border-color">
-                    <td class="p-2 font-medium text-purple-500">筹码峰</td>
-                    <td class="p-2 text-right" colspan="3">`;
-                mainForceCostData['成交密集区'].forEach((zone, idx) => {
-                    html += `<span class="inline-block mr-3 text-xs bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded">
-                        ${zone['价格区间']} (${zone['筹码占比']}%)
-                    </span>`;
-                });
-                html += `</td></tr>`;
+                    <td class="p-2 font-medium text-purple-500">筹码成本</td>
+                    <td class="p-2 text-right font-bold">${cm['筹码峰加权成本'] || '-'}</td>
+                    <td class="p-2 text-right text-orange-500 font-bold">25%</td>
+                    <td class="p-2 text-xs text-gray-400">前三大筹码峰占比: ${cm['前三大筹码峰占比'] || '-'}</td>
+                </tr>`;
+                // 显示筹码峰详情
+                if (cm['筹码峰详情'] && cm['筹码峰详情'].length > 0) {
+                    html += `<tr class="border-b border-border-color bg-purple-50/30 dark:bg-purple-900/10">
+                        <td class="p-2 text-xs text-gray-400">筹码峰详情</td>
+                        <td class="p-2 text-right" colspan="3">`;
+                    cm['筹码峰详情'].forEach((chip, idx) => {
+                        html += `<span class="inline-block mr-3 text-xs bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded">
+                            ${chip['价格区间']} (${chip['成交量占比']}%)
+                        </span>`;
+                    });
+                    html += `</td></tr>`;
+                }
+            }
+            
+            // 启动成本（原主升浪启动区）
+            if (mainForceCostData['启动成本']) {
+                const qs = mainForceCostData['启动成本'];
+                html += `<tr class="border-b border-border-color">
+                    <td class="p-2 font-medium text-green-500">启动成本</td>
+                    <td class="p-2 text-right font-bold">${qs['平均启动价'] || '-'}</td>
+                    <td class="p-2 text-right text-orange-500 font-bold">15%</td>
+                    <td class="p-2 text-xs text-gray-400">放量启动次数: ${qs['启动次数'] || 0}次</td>
+                </tr>`;
             }
             
             // 综合主力成本
@@ -3212,9 +3233,9 @@
                 const zh = mainForceCostData['综合主力成本'];
                 html += `<tr class="bg-blue-50 dark:bg-blue-900/20">
                     <td class="p-2 font-bold text-blue-600">综合主力成本</td>
-                    <td class="p-2 text-right font-bold">${zh['成本区间'] ? zh['成本区间'][0] + ' - ' + zh['成本区间'][1] : '-'}</td>
-                    <td class="p-2 text-right font-bold text-lg">${zh['平均成本'] || '-'}</td>
-                    <td class="p-2 text-xs text-gray-400">${zh['计算依据'] || ''}</td>
+                    <td class="p-2 text-right font-bold text-lg">${zh['主力成本'] || '-'}</td>
+                    <td class="p-2 text-right font-bold text-orange-600">100%</td>
+                    <td class="p-2 text-xs text-gray-400">${zh['权重分配'] || ''}</td>
                 </tr>`;
             }
             
@@ -3248,10 +3269,17 @@
             // 行情阶段判断
             if (mainForceCostData['行情阶段判断']) {
                 const jd = mainForceCostData['行情阶段判断'];
+                let stageClass = 'text-blue-500';
+                if (jd['阶段'] === '派发风险区') stageClass = 'text-red-500';
+                else if (jd['阶段'] === '加速区') stageClass = 'text-orange-500';
+                else if (jd['阶段'] === '主升区') stageClass = 'text-yellow-500';
+                else if (jd['阶段'] === '建仓区') stageClass = 'text-green-500';
+                else if (jd['阶段'] === '深度套牢区') stageClass = 'text-gray-500';
+                
                 html += `<div class="card p-4 mb-4">
                     <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">行情阶段判断</h5>
                     <div class="flex items-center gap-4">
-                        <div class="text-lg font-bold text-blue-500">${jd['阶段']}</div>
+                        <div class="text-lg font-bold ${stageClass}">${jd['阶段']}</div>
                         <div class="text-sm text-gray-400">${jd['描述']}</div>
                     </div>
                 </div>`;
@@ -3264,16 +3292,16 @@
                     <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">目标价推算</h5>
                     <div class="grid grid-cols-3 gap-4">
                         <div class="text-center p-3 bg-hover-bg rounded">
-                            <div class="text-xs text-gray-400 mb-1">普通行情</div>
-                            <div class="text-lg font-bold text-yellow-500">${mb['普通行情']}</div>
+                            <div class="text-xs text-gray-400 mb-1">普通行情(50%)</div>
+                            <div class="text-lg font-bold text-yellow-500">${mb['普通行情(50%)'] || '-'}</div>
                         </div>
                         <div class="text-center p-3 bg-hover-bg rounded">
-                            <div class="text-xs text-gray-400 mb-1">强势行情</div>
-                            <div class="text-lg font-bold text-orange-500">${mb['强势行情']}</div>
+                            <div class="text-xs text-gray-400 mb-1">强势行情(100%)</div>
+                            <div class="text-lg font-bold text-orange-500">${mb['强势行情(100%)'] || '-'}</div>
                         </div>
                         <div class="text-center p-3 bg-hover-bg rounded">
-                            <div class="text-xs text-gray-400 mb-1">超级行情</div>
-                            <div class="text-lg font-bold text-red-500">${mb['超级行情']}</div>
+                            <div class="text-xs text-gray-400 mb-1">超级行情(200%)</div>
+                            <div class="text-lg font-bold text-red-500">${mb['超级行情(200%)'] || '-'}</div>
                         </div>
                     </div>
                 </div>`;
@@ -3298,9 +3326,104 @@
                             <div class="text-lg font-bold text-red-500">${xp['止损参考'] || '-'}</div>
                         </div>
                     </div>
+                    <div class="grid grid-cols-3 gap-4 mb-3 text-sm">
+                        <div class="text-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <span class="text-gray-400">60日均线:</span>
+                            <span class="font-medium ml-1">${xp['60日均线'] || '-'}</span>
+                        </div>
+                        <div class="text-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <span class="text-gray-400">筹码峰下沿:</span>
+                            <span class="font-medium ml-1">${xp['筹码峰下沿'] || '-'}</span>
+                        </div>
+                        <div class="text-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <span class="text-gray-400">阶段高点:</span>
+                            <span class="font-medium ml-1">${xp['阶段高点(60日)'] || '-'}</span>
+                        </div>
+                    </div>
+                    ${xp['洗盘结构'] ? `
+                    <div class="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded">
+                        <div class="text-sm font-medium mb-2">📈 成交量结构分析</div>
+                        <div class="grid grid-cols-2 gap-2 text-sm">
+                            <div><span class="text-gray-400">结构判断:</span> <span class="font-medium">${xp['洗盘结构']['结构判断'] || '-'}</span></div>
+                            <div><span class="text-gray-400">行情性质:</span> <span class="font-medium">${xp['洗盘结构']['行情性质'] || '-'}</span></div>
+                            <div><span class="text-gray-400">成交量趋势:</span> <span class="font-medium">${xp['洗盘结构']['成交量趋势'] || '-'}</span></div>
+                            <div><span class="text-gray-400">风险提示:</span> <span class="font-medium text-yellow-600">${xp['洗盘结构']['风险提示'] || '-'}</span></div>
+                        </div>
+                    </div>
+                    ` : ''}
                     <div class="text-xs text-gray-400 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
                         ⚠️ ${xp['说明'] || ''}
                     </div>
+                </div>`;
+            }
+            
+            // 控盘度评分（新增）
+            if (mainForceCostData['控盘度评分']) {
+                const kp = mainForceCostData['控盘度评分'];
+                let scoreClass = 'text-green-500';
+                if (kp['控盘等级'] === '高度控盘') scoreClass = 'text-red-500';
+                else if (kp['控盘等级'] === '中度控盘') scoreClass = 'text-yellow-500';
+                
+                html += `<div class="card p-4 mb-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">🎯 控盘度评分 V2.0</h5>
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">控盘等级</div>
+                            <div class="text-lg font-bold ${scoreClass}">${kp['控盘等级'] || '-'}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">控盘评分</div>
+                            <div class="text-lg font-bold">${kp['控盘评分'] || '-'}/100</div>
+                        </div>
+                    </div>`;
+                
+                if (kp['评分明细']) {
+                    const detail = kp['评分明细'];
+                    html += `<div class="text-xs text-gray-500 mb-2 font-bold">📊 评分明细</div>
+                    <div class="grid grid-cols-2 gap-2 text-xs">`;
+                    
+                    if (detail['筹码集中度']) {
+                        const chip = detail['筹码集中度'];
+                        html += `<div class="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <div class="font-bold text-gray-600 dark:text-gray-400">筹码集中度 (${chip['集中度评分']}/30)</div>
+                            <div class="text-gray-500">${chip['90%筹码区间'] || '-'}</div>
+                            <div class="text-gray-400">${chip['说明'] || ''}</div>
+                        </div>`;
+                    }
+                    
+                    if (detail['换手率稳定性']) {
+                        const turnover = detail['换手率稳定性'];
+                        html += `<div class="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <div class="font-bold text-gray-600 dark:text-gray-400">换手率稳定性 (${turnover['稳定性评分']}/25)</div>
+                            <div class="text-gray-500">平均: ${turnover['平均换手率'] || '-'}</div>
+                            <div class="text-gray-400">${turnover['说明'] || ''}</div>
+                        </div>`;
+                    }
+                    
+                    if (detail['走势独立性']) {
+                        const indep = detail['走势独立性'];
+                        html += `<div class="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <div class="font-bold text-gray-600 dark:text-gray-400">走势独立性 (${indep['独立性评分']}/20)</div>
+                            <div class="text-gray-500">超额波动: ${indep['超额波动率'] || '-'}</div>
+                            <div class="text-gray-400">${indep['说明'] || ''}</div>
+                        </div>`;
+                    }
+                    
+                    if (detail['成本位置']) {
+                        const cost = detail['成本位置'];
+                        html += `<div class="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                            <div class="font-bold text-gray-600 dark:text-gray-400">成本位置 (${cost['成本位置评分']}/25)</div>
+                            <div class="text-gray-500">${cost['成本位置'] || '-'} (${cost['距成本区'] || '-'})</div>
+                            <div class="text-gray-400">${cost['说明'] || ''}</div>
+                        </div>`;
+                    }
+                    
+                    html += `</div>`;
+                }
+                
+                html += `<div class="text-xs text-gray-400 p-2 mt-2 bg-gray-50 dark:bg-gray-800 rounded">
+                    💡 ${kp['评分规则'] || ''}
+                </div>
                 </div>`;
             }
             
@@ -4501,26 +4624,26 @@
         }
         
         // 四点五、主力成本区分析
-        if (data.mainForceCostData && data.mainForceCostData['综合主力成本']) {
-            text += `【主力成本区分析】\n`;
+        const mainForceCostData = data.marketData?.['主力成本区'];
+        if (mainForceCostData && mainForceCostData['综合主力成本']) {
+            text += `【主力成本区分析 V2.0】\n`;
             text += `──────────────────────────────────────────────────\n`;
-            const mfc = data.mainForceCostData;
+            const mfc = mainForceCostData;
             
-            if (mfc['定增成本区']) {
-                text += `定增成本：${mfc['定增成本区']['价格区间'] ? mfc['定增成本区']['价格区间'][0] + ' - ' + mfc['定增成本区']['价格区间'][1] : '-'}，平均：${mfc['定增成本区']['平均成本'] || '-'}\n`;
+            if (mfc['机构成本']) {
+                text += `机构成本(35%)：${mfc['机构成本']['定增加权成本'] || '-'}，定增次数：${mfc['机构成本']['定增次数'] || 0}次\n`;
             }
-            if (mfc['主升浪启动区']) {
-                text += `主升浪启动区：${mfc['主升浪启动区']['价格区间'] ? mfc['主升浪启动区']['价格区间'][0] + ' - ' + mfc['主升浪启动区']['价格区间'][1] : '-'}，平均：${mfc['主升浪启动区']['平均成本'] || '-'}\n`;
+            if (mfc['VWAP成本']) {
+                text += `VWAP成本(25%)：${mfc['VWAP成本']['综合VWAP'] || '-'}（60日：${mfc['VWAP成本']['VWAP60'] || '-'}，120日：${mfc['VWAP成本']['VWAP120'] || '-'}）\n`;
             }
-            if (mfc['成交密集区'] && mfc['成交密集区'].length > 0) {
-                text += `筹码峰：`;
-                mfc['成交密集区'].forEach((zone, idx) => {
-                    text += `${zone['价格区间']}(${zone['筹码占比']}%) `;
-                });
-                text += '\n';
+            if (mfc['筹码成本']) {
+                text += `筹码成本(25%)：${mfc['筹码成本']['筹码峰加权成本'] || '-'}，筹码集中度：${mfc['筹码成本']['前三大筹码峰占比'] || '-'}\n`;
+            }
+            if (mfc['启动成本']) {
+                text += `启动成本(15%)：${mfc['启动成本']['平均启动价'] || '-'}，启动次数：${mfc['启动成本']['启动次数'] || 0}次\n`;
             }
             if (mfc['综合主力成本']) {
-                text += `综合主力成本：${mfc['综合主力成本']['成本区间'] ? mfc['综合主力成本']['成本区间'][0] + ' - ' + mfc['综合主力成本']['成本区间'][1] : '-'}，平均：${mfc['综合主力成本']['平均成本'] || '-'}\n`;
+                text += `综合主力成本：${mfc['综合主力成本']['主力成本'] || '-'}（${mfc['综合主力成本']['权重分配'] || ''}）\n`;
             }
             if (mfc['主力盈利比例']) {
                 text += `主力盈利：${mfc['主力盈利比例']['盈利比例']}（当前价：${mfc['主力盈利比例']['当前价格']}，成本：${mfc['主力盈利比例']['主力成本']}）\n`;
@@ -4529,10 +4652,24 @@
                 text += `行情阶段：${mfc['行情阶段判断']['阶段']}（${mfc['行情阶段判断']['描述']}）\n`;
             }
             if (mfc['目标价推算']) {
-                text += `目标价：普通${mfc['目标价推算']['普通行情']} / 强势${mfc['目标价推算']['强势行情']} / 超级${mfc['目标价推算']['超级行情']}\n`;
+                text += `目标价：普通${mfc['目标价推算']['普通行情(50%)'] || '-'} / 强势${mfc['目标价推算']['强势行情(100%)'] || '-'} / 超级${mfc['目标价推算']['超级行情(200%)'] || '-'}\n`;
             }
             if (mfc['洗盘区间']) {
                 text += `洗盘区间：${mfc['洗盘区间']['正常洗盘'] ? mfc['洗盘区间']['正常洗盘'][0] + ' - ' + mfc['洗盘区间']['正常洗盘'][1] : '-'}，极限：${mfc['洗盘区间']['极限洗盘'] || '-'}，止损：${mfc['洗盘区间']['止损参考'] || '-'}\n`;
+                if (mfc['洗盘区间']['洗盘结构']) {
+                    text += `成交量结构：${mfc['洗盘区间']['洗盘结构']['结构判断'] || '-'}（${mfc['洗盘区间']['洗盘结构']['行情性质'] || '-'}）\n`;
+                }
+            }
+            if (mfc['控盘度评分']) {
+                const kp = mfc['控盘度评分'];
+                text += `控盘度：${kp['控盘等级']}（评分：${kp['控盘评分']}/100）\n`;
+                if (kp['评分明细']) {
+                    const detail = kp['评分明细'];
+                    if (detail['筹码集中度']) text += `  筹码集中度：${detail['筹码集中度']['集中度评分']}/30 - ${detail['筹码集中度']['说明']}\n`;
+                    if (detail['换手率稳定性']) text += `  换手率稳定性：${detail['换手率稳定性']['稳定性评分']}/25 - ${detail['换手率稳定性']['说明']}\n`;
+                    if (detail['走势独立性']) text += `  走势独立性：${detail['走势独立性']['独立性评分']}/20 - ${detail['走势独立性']['说明']}\n`;
+                    if (detail['成本位置']) text += `  成本位置：${detail['成本位置']['成本位置评分']}/25 - ${detail['成本位置']['说明']}\n`;
+                }
             }
             text += '\n';
         }
