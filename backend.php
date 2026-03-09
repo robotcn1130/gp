@@ -3078,7 +3078,7 @@ sendProgress(47, '分时图数据获取完成，正在获取K线数据...');
 // 获取K线数据（可能失败）
 $klineData = [];
 try {
-    $klineData = getKLineData($fullCode, 60);
+    $klineData = getKLineData($fullCode, 150);
 } catch (Exception $e) {
     error_log('获取K线数据失败: ' . $e->getMessage());
     $klineData = [];
