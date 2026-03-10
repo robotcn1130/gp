@@ -1,3 +1,7 @@
+##
+主力成本区分析 这个版本增加了数据库字段，config.php的SYSTEM_INSTALLED改成false运行install.php重新安装一下，注意设置账号密码和key，历史数据都会保留
+
+
 #### 注意，本软件全部为AI生成，包括下面的文字。
 
 # AI 股票穿透分析系统
