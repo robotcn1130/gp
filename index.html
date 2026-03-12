@@ -6,6 +6,7 @@
     <title>基于DeepSeek的AI股票分析</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="js/dompdf.js"></script>
     <script src="js/SourceHanSansSC-Normal-Min-normal.js"></script>
@@ -2977,7 +2978,14 @@
                         <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">资金流入流出对比(万元)</h5>
                         <canvas id="moneyFlowCompareChart" style="max-height: 300px;"></canvas>
                     </div>
-                </div></div>`;
+                </div>
+                
+                <!-- 主力资金净流入历史图表（支持滑动查看） -->
+                <div class="card p-4 mt-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">📊 主力资金净流入历史（最近60日，可滑动查看更多）</h5>
+                    <div id="mainFundChart" style="width:100%;height:420px;"></div>
+                </div>
+                </div>`;
         }
         
         // 4. 技术指标
@@ -3157,86 +3165,99 @@
                 </div>`;
             } else if (mainForceCostData['综合主力成本']) {
                 html += `<div class="mb-6">
-                    <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 主力成本区分析 V2.0</h4>
+                    <h4 class="text-lg font-bold mb-3 text-gray-700 dark:text-gray-300">📊 主力成本区分析 V3.0 <span class="text-xs font-normal text-gray-400">(Volume Profile 筹码密集区算法)</span></h4>
                     <div class="card p-4 mb-4">
-                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">主力成本推算（多层成本结构模型）</h5>
+                        <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">主力成本推算（筹码密集区模型）</h5>
                         <div class="overflow-x-auto">
                             <table class="w-full text-sm">
                                 <thead>
                                     <tr class="border-b border-border-color">
                                         <th class="text-left p-2 text-gray-400">成本类型</th>
-                                        <th class="text-right p-2 text-gray-400">成本值</th>
-                                        <th class="text-right p-2 text-gray-400">权重</th>
+                                        <th class="text-right p-2 text-gray-400">成本值/区间</th>
                                         <th class="text-left p-2 text-gray-400">说明</th>
                                     </tr>
                                 </thead>
                                 <tbody>`;
             
-            // 机构成本（原定增成本区）
-            if (mainForceCostData['机构成本']) {
-                const jg = mainForceCostData['机构成本'];
-                html += `<tr class="border-b border-border-color">
-                    <td class="p-2 font-medium text-blue-500">机构成本</td>
-                    <td class="p-2 text-right font-bold">${jg['定增加权成本'] || '-'}</td>
-                    <td class="p-2 text-right text-orange-500 font-bold">35%</td>
-                    <td class="p-2 text-xs text-gray-400">定增次数: ${jg['定增次数'] || 0}次 | ${jg['计算公式'] || ''}</td>
+            // Volume Profile 成本区（主力）
+            if (mainForceCostData['VolumeProfile成本区']) {
+                const vp = mainForceCostData['VolumeProfile成本区'];
+                const zone = vp['主力成本区'];
+                html += `<tr class="border-b border-border-color bg-green-50/30 dark:bg-green-900/10">
+                    <td class="p-2 font-medium text-green-600">🎯 Volume Profile</td>
+                    <td class="p-2 text-right font-bold text-green-600">${zone['下限']} - ${zone['上限']}</td>
+                    <td class="p-2 text-xs text-gray-400">中值: ${zone['中值']} | 占比: ${zone['成交量占比']} | POC: ${vp['POC价格']}</td>
                 </tr>`;
             }
             
-            // VWAP成本（新增）
+            // 机构成本（参考）
+            if (mainForceCostData['机构成本']) {
+                const jg = mainForceCostData['机构成本'];
+                const priceRange = jg['价格区间'];
+                html += `<tr class="border-b border-border-color">
+                    <td class="p-2 font-medium text-blue-500">机构成本 <span class="text-xs text-gray-400">(参考)</span></td>
+                    <td class="p-2 text-right font-bold">${jg['定增加权成本'] || '-'}</td>
+                    <td class="p-2 text-xs text-gray-400">定增次数: ${jg['定增次数'] || 0}次 | 区间: ${priceRange ? priceRange[0] + '-' + priceRange[1] : '-'}</td>
+                </tr>`;
+            }
+            
+            // VWAP成本（参考）
             if (mainForceCostData['VWAP成本']) {
                 const vwap = mainForceCostData['VWAP成本'];
                 html += `<tr class="border-b border-border-color">
-                    <td class="p-2 font-medium text-cyan-500">VWAP成本</td>
+                    <td class="p-2 font-medium text-cyan-500">VWAP成本 <span class="text-xs text-gray-400">(参考)</span></td>
                     <td class="p-2 text-right font-bold">${vwap['综合VWAP'] || '-'}</td>
-                    <td class="p-2 text-right text-orange-500 font-bold">25%</td>
                     <td class="p-2 text-xs text-gray-400">60日: ${vwap['VWAP60'] || '-'} | 120日: ${vwap['VWAP120'] || '-'}</td>
                 </tr>`;
             }
             
-            // 筹码成本（原成交密集区）
+            // 筹码成本（参考）
             if (mainForceCostData['筹码成本']) {
                 const cm = mainForceCostData['筹码成本'];
                 html += `<tr class="border-b border-border-color">
-                    <td class="p-2 font-medium text-purple-500">筹码成本</td>
+                    <td class="p-2 font-medium text-purple-500">筹码成本 <span class="text-xs text-gray-400">(参考)</span></td>
                     <td class="p-2 text-right font-bold">${cm['筹码峰加权成本'] || '-'}</td>
-                    <td class="p-2 text-right text-orange-500 font-bold">25%</td>
                     <td class="p-2 text-xs text-gray-400">前三大筹码峰占比: ${cm['前三大筹码峰占比'] || '-'}</td>
                 </tr>`;
-                // 显示筹码峰详情
-                if (cm['筹码峰详情'] && cm['筹码峰详情'].length > 0) {
-                    html += `<tr class="border-b border-border-color bg-purple-50/30 dark:bg-purple-900/10">
-                        <td class="p-2 text-xs text-gray-400">筹码峰详情</td>
-                        <td class="p-2 text-right" colspan="3">`;
-                    cm['筹码峰详情'].forEach((chip, idx) => {
-                        html += `<span class="inline-block mr-3 text-xs bg-purple-100 dark:bg-purple-900/30 px-2 py-1 rounded">
-                            ${chip['价格区间']} (${chip['成交量占比']}%)
-                        </span>`;
-                    });
-                    html += `</td></tr>`;
-                }
             }
             
-            // 启动成本（原主升浪启动区）
+            // 启动成本（参考）
             if (mainForceCostData['启动成本']) {
                 const qs = mainForceCostData['启动成本'];
                 html += `<tr class="border-b border-border-color">
-                    <td class="p-2 font-medium text-green-500">启动成本</td>
+                    <td class="p-2 font-medium text-green-500">启动成本 <span class="text-xs text-gray-400">(参考)</span></td>
                     <td class="p-2 text-right font-bold">${qs['平均启动价'] || '-'}</td>
-                    <td class="p-2 text-right text-orange-500 font-bold">15%</td>
                     <td class="p-2 text-xs text-gray-400">放量启动次数: ${qs['启动次数'] || 0}次</td>
                 </tr>`;
             }
             
-            // 综合主力成本
+            // 综合主力成本区
             if (mainForceCostData['综合主力成本']) {
                 const zh = mainForceCostData['综合主力成本'];
+                const costZone = zh['主力成本区'];
                 html += `<tr class="bg-blue-50 dark:bg-blue-900/20">
-                    <td class="p-2 font-bold text-blue-600">综合主力成本</td>
-                    <td class="p-2 text-right font-bold text-lg">${zh['主力成本'] || '-'}</td>
-                    <td class="p-2 text-right font-bold text-orange-600">100%</td>
-                    <td class="p-2 text-xs text-gray-400">${zh['权重分配'] || ''}</td>
+                    <td class="p-2 font-bold text-blue-600">📍 综合主力成本区</td>
+                    <td class="p-2 text-right font-bold text-lg text-blue-600">${costZone['下限']} - ${costZone['上限']}</td>
+                    <td class="p-2 text-xs text-gray-400">中值: ${costZone['中值']} | 宽度: ${zh['成本区间宽度']} (${zh['宽度占比'] || '-'})</td>
+                </tr>
+                <tr class="bg-blue-50/50 dark:bg-blue-900/10">
+                    <td colspan="3" class="p-2 text-xs text-gray-500">
+                        <span class="text-blue-500">💡 ${zh['算法说明']}</span>
+                        ${zh['权重分配'] ? `<br><span class="text-gray-400">权重: ${zh['权重分配']}</span>` : ''}
+                    </td>
                 </tr>`;
+            }
+            
+            // 长线支撑位
+            if (mainForceCostData['长线支撑位'] && mainForceCostData['长线支撑位'].length > 0) {
+                const support = mainForceCostData['长线支撑位'];
+                html += `<tr class="bg-orange-50/50 dark:bg-orange-900/10">
+                    <td class="p-2 font-medium text-orange-600">🛡️ 长线支撑位</td>
+                    <td colspan="2" class="p-2 text-xs text-gray-500">`;
+                support.forEach(s => {
+                    html += `<div>${s}</div>`;
+                });
+                html += `</td></tr>`;
             }
             
             html += `</tbody></table></div></div>`;
@@ -3244,23 +3265,26 @@
             // 主力盈利分析
             if (mainForceCostData['主力盈利比例']) {
                 const yl = mainForceCostData['主力盈利比例'];
-                const profitNum = parseFloat(yl['盈利比例']) || 0;
-                let profitClass = profitNum > 50 ? 'text-red-500' : (profitNum > 0 ? 'text-yellow-500' : 'text-green-500');
+                const profitRange = yl['盈利比例区间'];
                 
                 html += `<div class="card p-4 mb-4">
                     <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">主力盈利分析</h5>
-                    <div class="grid grid-cols-3 gap-4">
+                    <div class="grid grid-cols-4 gap-4">
                         <div class="text-center p-3 bg-hover-bg rounded">
                             <div class="text-xs text-gray-400 mb-1">当前价格</div>
                             <div class="text-lg font-bold">${yl['当前价格']}</div>
                         </div>
                         <div class="text-center p-3 bg-hover-bg rounded">
-                            <div class="text-xs text-gray-400 mb-1">主力成本</div>
-                            <div class="text-lg font-bold">${yl['主力成本']}</div>
+                            <div class="text-xs text-gray-400 mb-1">主力成本区</div>
+                            <div class="text-lg font-bold">${yl['主力成本区']}</div>
                         </div>
                         <div class="text-center p-3 bg-hover-bg rounded">
-                            <div class="text-xs text-gray-400 mb-1">主力盈利</div>
-                            <div class="text-lg font-bold ${profitClass}">${yl['盈利比例']}</div>
+                            <div class="text-xs text-gray-400 mb-1">盈利区间</div>
+                            <div class="text-lg font-bold text-yellow-500">${profitRange['下限']} ~ ${profitRange['上限']}</div>
+                        </div>
+                        <div class="text-center p-3 bg-hover-bg rounded">
+                            <div class="text-xs text-gray-400 mb-1">中值盈利</div>
+                            <div class="text-lg font-bold text-green-500">${profitRange['中值']}</div>
                         </div>
                     </div>
                 </div>`;
@@ -3281,6 +3305,7 @@
                     <div class="flex items-center gap-4">
                         <div class="text-lg font-bold ${stageClass}">${jd['阶段']}</div>
                         <div class="text-sm text-gray-400">${jd['描述']}</div>
+                        <div class="text-sm text-blue-500 font-medium">利润区间: ${jd['主力利润区间']}</div>
                     </div>
                 </div>`;
             }
@@ -3289,19 +3314,19 @@
             if (mainForceCostData['目标价推算']) {
                 const mb = mainForceCostData['目标价推算'];
                 html += `<div class="card p-4 mb-4">
-                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">目标价推算</h5>
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">目标价推算（基于成本区间）</h5>
                     <div class="grid grid-cols-3 gap-4">
                         <div class="text-center p-3 bg-hover-bg rounded">
                             <div class="text-xs text-gray-400 mb-1">普通行情(50%)</div>
-                            <div class="text-lg font-bold text-yellow-500">${mb['普通行情(50%)'] || '-'}</div>
+                            <div class="text-lg font-bold text-yellow-500">${mb['普通行情(50%)']['下限']} - ${mb['普通行情(50%)']['上限']}</div>
                         </div>
                         <div class="text-center p-3 bg-hover-bg rounded">
                             <div class="text-xs text-gray-400 mb-1">强势行情(100%)</div>
-                            <div class="text-lg font-bold text-orange-500">${mb['强势行情(100%)'] || '-'}</div>
+                            <div class="text-lg font-bold text-orange-500">${mb['强势行情(100%)']['下限']} - ${mb['强势行情(100%)']['上限']}</div>
                         </div>
                         <div class="text-center p-3 bg-hover-bg rounded">
                             <div class="text-xs text-gray-400 mb-1">超级行情(200%)</div>
-                            <div class="text-lg font-bold text-red-500">${mb['超级行情(200%)'] || '-'}</div>
+                            <div class="text-lg font-bold text-red-500">${mb['超级行情(200%)']['下限']} - ${mb['超级行情(200%)']['上限']}</div>
                         </div>
                     </div>
                 </div>`;
@@ -3326,7 +3351,7 @@
                             <div class="text-lg font-bold text-red-500">${xp['止损参考'] || '-'}</div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-3 gap-4 mb-3 text-sm">
+                    <div class="grid grid-cols-4 gap-4 mb-3 text-sm">
                         <div class="text-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
                             <span class="text-gray-400">60日均线:</span>
                             <span class="font-medium ml-1">${xp['60日均线'] || '-'}</span>
@@ -3334,6 +3359,10 @@
                         <div class="text-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
                             <span class="text-gray-400">筹码峰下沿:</span>
                             <span class="font-medium ml-1">${xp['筹码峰下沿'] || '-'}</span>
+                        </div>
+                        <div class="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded">
+                            <span class="text-gray-400">主力成本区下限:</span>
+                            <span class="font-medium ml-1 text-green-600">${xp['主力成本区下限'] || '-'}</span>
                         </div>
                         <div class="text-center p-2 bg-gray-50 dark:bg-gray-800 rounded">
                             <span class="text-gray-400">阶段高点:</span>
@@ -3625,6 +3654,282 @@
                         console.log('资金流入流出对比图表绘制成功');
                     } catch (error) {
                         console.error('绘制资金流入流出对比图表失败:', error);
+                    }
+                }
+                
+                // 绘制主力资金净流入历史图表（ECharts）
+                const mainFundChartDom = document.getElementById('mainFundChart');
+                if (mainFundChartDom && typeof echarts !== 'undefined') {
+                    console.log('准备绘制主力资金净流入历史图表...');
+                    
+                    // 获取历史主力资金数据
+                    let historyMainFundData = [];
+                    if (stockData['历史主力资金'] && Array.isArray(stockData['历史主力资金'])) {
+                        historyMainFundData = stockData['历史主力资金'];
+                    } else if (data['历史主力资金'] && Array.isArray(data['历史主力资金'])) {
+                        historyMainFundData = data['历史主力资金'];
+                    }
+                    
+                    if (historyMainFundData.length > 0) {
+                        // 销毁旧图表实例
+                        if (window.mainFundChartInstance) {
+                            window.mainFundChartInstance.dispose();
+                        }
+                        
+                        // 创建新的ECharts实例
+                        window.mainFundChartInstance = echarts.init(mainFundChartDom);
+                        
+                        // 准备图表数据
+                        const dates = historyMainFundData.map(item => item.date);
+                        const netValues = historyMainFundData.map(item => item.net);
+                        const sumValues = historyMainFundData.map(item => item.sum);
+                        
+                        // 计算默认显示的数据范围（最近60日）
+                        const totalDays = dates.length;
+                        const defaultShowDays = Math.min(60, totalDays);
+                        const startPercent = totalDays > defaultShowDays ? ((totalDays - defaultShowDays) / totalDays * 100) : 0;
+                        
+                        // 判断当前主题
+                        const isDark = document.body.getAttribute('data-theme') === 'dark';
+                        const textColor = isDark ? '#c9d1d9' : '#1f2328';
+                        const gridColor = isDark ? '#30363d' : '#e5e7eb';
+                        
+                        // 格式化金额函数
+                        function formatAmount(value) {
+                            const absVal = Math.abs(value);
+                            if (absVal >= 100000000) {
+                                return (value / 100000000).toFixed(2) + '亿';
+                            } else if (absVal >= 10000) {
+                                return (value / 10000).toFixed(2) + '万';
+                            } else {
+                                return value.toFixed(0) + '元';
+                            }
+                        }
+                        
+                        // 图表配置
+                        const option = {
+                            backgroundColor: 'transparent',
+                            tooltip: {
+                                trigger: 'axis',
+                                axisPointer: {
+                                    type: 'shadow'
+                                },
+                                formatter: function(params) {
+                                    const dataIndex = params[0].dataIndex;
+                                    const date = dates[dataIndex];
+                                    const net = netValues[dataIndex];
+                                    const sum = sumValues[dataIndex];
+                                    const netSign = net >= 0 ? '+' : '';
+                                    const sumSign = sum >= 0 ? '+' : '';
+                                    const netColor = net >= 0 ? '#ef4444' : '#22c55e';
+                                    const sumColor = sum >= 0 ? '#ef4444' : '#22c55e';
+                                    
+                                    // 计算5日、10日、20日、60日净流入
+                                    function calcPeriodNet(days) {
+                                        let total = 0;
+                                        const startIdx = Math.max(0, dataIndex - days + 1);
+                                        for (let i = startIdx; i <= dataIndex; i++) {
+                                            total += netValues[i];
+                                        }
+                                        return total;
+                                    }
+                                    
+                                    const net5 = calcPeriodNet(5);
+                                    const net10 = calcPeriodNet(10);
+                                    const net20 = calcPeriodNet(20);
+                                    const net60 = calcPeriodNet(60);
+                                    
+                                    function formatPeriod(value) {
+                                        const sign = value >= 0 ? '+' : '';
+                                        const color = value >= 0 ? '#ef4444' : '#22c55e';
+                                        return `<span style="color: ${color};">${sign}${formatAmount(value)}</span>`;
+                                    }
+                                    
+                                    return `<div style="padding: 10px; min-width: 200px;">
+                                        <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #30363d; padding-bottom: 6px;">📅 日期：${date}</div>
+                                        <div style="margin-bottom: 4px;">
+                                            当日主力净流入：${formatPeriod(net)}
+                                        </div>
+                                        <div style="margin-bottom: 4px;">
+                                            截至当日累计净流入：${formatPeriod(sum)}
+                                        </div>
+                                        <div style="margin-top: 8px; border-top: 1px solid #30363d; padding-top: 6px;">
+                                            <div style="margin-bottom: 3px;">📊 近期净流入汇总：</div>
+                                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                                <span style="color: #8b949e;">5日净流入：</span>
+                                                ${formatPeriod(net5)}
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                                <span style="color: #8b949e;">10日净流入：</span>
+                                                ${formatPeriod(net10)}
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                                                <span style="color: #8b949e;">20日净流入：</span>
+                                                ${formatPeriod(net20)}
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between;">
+                                                <span style="color: #8b949e;">60日净流入：</span>
+                                                ${formatPeriod(net60)}
+                                            </div>
+                                        </div>
+                                    </div>`;
+                                }
+                            },
+                            legend: {
+                                data: ['当日净流入', '累计净流入'],
+                                top: 10,
+                                textStyle: {
+                                    color: textColor
+                                }
+                            },
+                            grid: {
+                                left: '3%',
+                                right: '4%',
+                                bottom: '15%',
+                                top: '15%',
+                                containLabel: true
+                            },
+                            xAxis: {
+                                type: 'category',
+                                data: dates,
+                                axisLabel: {
+                                    color: textColor,
+                                    rotate: 45,
+                                    fontSize: 10
+                                },
+                                axisLine: {
+                                    lineStyle: {
+                                        color: gridColor
+                                    }
+                                }
+                            },
+                            yAxis: [
+                                {
+                                    type: 'value',
+                                    name: '净流入(元)',
+                                    nameTextStyle: {
+                                        color: textColor
+                                    },
+                                    axisLabel: {
+                                        color: textColor,
+                                        formatter: function(value) {
+                                            return formatAmount(value);
+                                        }
+                                    },
+                                    axisLine: {
+                                        lineStyle: {
+                                            color: gridColor
+                                        }
+                                    },
+                                    splitLine: {
+                                        lineStyle: {
+                                            color: gridColor,
+                                            type: 'dashed'
+                                        }
+                                    }
+                                },
+                                {
+                                    type: 'value',
+                                    name: '累计净流入(元)',
+                                    nameTextStyle: {
+                                        color: textColor
+                                    },
+                                    axisLabel: {
+                                        color: textColor,
+                                        formatter: function(value) {
+                                            return formatAmount(value);
+                                        }
+                                    },
+                                    axisLine: {
+                                        lineStyle: {
+                                            color: gridColor
+                                        }
+                                    },
+                                    splitLine: {
+                                        show: false
+                                    }
+                                }
+                            ],
+                            dataZoom: [
+                                {
+                                    type: 'slider',
+                                    show: true,
+                                    start: startPercent,
+                                    end: 100,
+                                    height: 20,
+                                    bottom: 10,
+                                    borderColor: gridColor,
+                                    textStyle: {
+                                        color: textColor
+                                    },
+                                    handleStyle: {
+                                        color: '#58a6ff'
+                                    },
+                                    dataBackground: {
+                                        lineStyle: {
+                                            color: '#58a6ff'
+                                        },
+                                        areaStyle: {
+                                            color: 'rgba(88, 166, 255, 0.3)'
+                                        }
+                                    }
+                                },
+                                {
+                                    type: 'inside',
+                                    start: startPercent,
+                                    end: 100,
+                                    zoomOnMouseWheel: true,
+                                    moveOnMouseMove: true
+                                }
+                            ],
+                            series: [
+                                {
+                                    name: '当日净流入',
+                                    type: 'bar',
+                                    data: netValues,
+                                    itemStyle: {
+                                        color: function(params) {
+                                            return params.value >= 0 ? '#ef4444' : '#22c55e';
+                                        }
+                                    },
+                                    barWidth: '60%'
+                                },
+                                {
+                                    name: '累计净流入',
+                                    type: 'line',
+                                    yAxisIndex: 1,
+                                    data: sumValues,
+                                    smooth: true,
+                                    lineStyle: {
+                                        color: '#f59e0b',
+                                        width: 2
+                                    },
+                                    itemStyle: {
+                                        color: '#f59e0b'
+                                    },
+                                    symbol: 'none',
+                                    areaStyle: {
+                                        color: {
+                                            type: 'linear',
+                                            x: 0,
+                                            y: 0,
+                                            x2: 0,
+                                            y2: 1,
+                                            colorStops: [
+                                                { offset: 0, color: 'rgba(245, 158, 11, 0.3)' },
+                                                { offset: 1, color: 'rgba(245, 158, 11, 0.05)' }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        };
+                        
+                        window.mainFundChartInstance.setOption(option);
+                        console.log('主力资金净流入历史图表绘制成功，共' + totalDays + '天数据');
+                    } else {
+                        console.log('没有历史主力资金数据，跳过绘制');
+                        mainFundChartDom.innerHTML = '<div style="text-align:center;padding:50px;color:#8b949e;">暂无历史主力资金数据</div>';
                     }
                 }
             } else {
@@ -4435,7 +4740,19 @@
         if (currentDisplayedMarketData && !marketCard.classList.contains('hidden')) {
             renderMarketTable(currentDisplayedMarketData);
         }
+        
+        // ECharts图表resize
+        if (window.mainFundChartInstance) {
+            window.mainFundChartInstance.resize();
+        }
     }
+    
+    // 窗口大小改变时重新调整图表
+    window.addEventListener('resize', function() {
+        if (window.mainFundChartInstance) {
+            window.mainFundChartInstance.resize();
+        }
+    });
     
     // 更新CSS变量
     function updateCSSVariables(theme) {
@@ -4626,36 +4943,62 @@
         // 四点五、主力成本区分析
         const mainForceCostData = data.marketData?.['主力成本区'];
         if (mainForceCostData && mainForceCostData['综合主力成本']) {
-            text += `【主力成本区分析 V2.0】\n`;
+            text += `【主力成本区分析 V3.0】\n`;
             text += `──────────────────────────────────────────────────\n`;
             const mfc = mainForceCostData;
             
+            if (mfc['VolumeProfile成本区']) {
+                const vp = mfc['VolumeProfile成本区'];
+                const zone = vp['主力成本区'];
+                text += `Volume Profile成本区：${zone['下限']} - ${zone['上限']}（中值：${zone['中值']}，占比：${zone['成交量占比']}）\n`;
+                text += `POC价格：${vp['POC价格']}\n`;
+            }
             if (mfc['机构成本']) {
-                text += `机构成本(35%)：${mfc['机构成本']['定增加权成本'] || '-'}，定增次数：${mfc['机构成本']['定增次数'] || 0}次\n`;
+                const priceRange = mfc['机构成本']['价格区间'];
+                text += `机构成本(参考)：${mfc['机构成本']['定增加权成本'] || '-'}，定增次数：${mfc['机构成本']['定增次数'] || 0}次，区间：${priceRange ? priceRange[0] + '-' + priceRange[1] : '-'}\n`;
             }
             if (mfc['VWAP成本']) {
-                text += `VWAP成本(25%)：${mfc['VWAP成本']['综合VWAP'] || '-'}（60日：${mfc['VWAP成本']['VWAP60'] || '-'}，120日：${mfc['VWAP成本']['VWAP120'] || '-'}）\n`;
+                text += `VWAP成本(参考)：${mfc['VWAP成本']['综合VWAP'] || '-'}（60日：${mfc['VWAP成本']['VWAP60'] || '-'}，120日：${mfc['VWAP成本']['VWAP120'] || '-'}）\n`;
             }
             if (mfc['筹码成本']) {
-                text += `筹码成本(25%)：${mfc['筹码成本']['筹码峰加权成本'] || '-'}，筹码集中度：${mfc['筹码成本']['前三大筹码峰占比'] || '-'}\n`;
+                text += `筹码成本(参考)：${mfc['筹码成本']['筹码峰加权成本'] || '-'}，筹码集中度：${mfc['筹码成本']['前三大筹码峰占比'] || '-'}\n`;
             }
             if (mfc['启动成本']) {
-                text += `启动成本(15%)：${mfc['启动成本']['平均启动价'] || '-'}，启动次数：${mfc['启动成本']['启动次数'] || 0}次\n`;
+                text += `启动成本(参考)：${mfc['启动成本']['平均启动价'] || '-'}，启动次数：${mfc['启动成本']['启动次数'] || 0}次\n`;
             }
             if (mfc['综合主力成本']) {
-                text += `综合主力成本：${mfc['综合主力成本']['主力成本'] || '-'}（${mfc['综合主力成本']['权重分配'] || ''}）\n`;
+                const costZone = mfc['综合主力成本']['主力成本区'];
+                text += `综合主力成本区：${costZone['下限']} - ${costZone['上限']}（中值：${costZone['中值']}，宽度：${mfc['综合主力成本']['成本区间宽度']}，占比：${mfc['综合主力成本']['宽度占比'] || '-'}）\n`;
+                text += `算法说明：${mfc['综合主力成本']['算法说明']}\n`;
+                if (mfc['综合主力成本']['权重分配']) {
+                    text += `权重分配：${mfc['综合主力成本']['权重分配']}\n`;
+                }
+            }
+            if (mfc['长线支撑位'] && mfc['长线支撑位'].length > 0) {
+                text += `长线支撑位：\n`;
+                mfc['长线支撑位'].forEach(s => {
+                    text += `  ${s}\n`;
+                });
             }
             if (mfc['主力盈利比例']) {
-                text += `主力盈利：${mfc['主力盈利比例']['盈利比例']}（当前价：${mfc['主力盈利比例']['当前价格']}，成本：${mfc['主力盈利比例']['主力成本']}）\n`;
+                const profitRange = mfc['主力盈利比例']['盈利比例区间'];
+                text += `主力盈利区间：${profitRange['下限']} ~ ${profitRange['上限']}（中值：${profitRange['中值']}）\n`;
+                text += `当前价格：${mfc['主力盈利比例']['当前价格']}，主力成本区：${mfc['主力盈利比例']['主力成本区']}\n`;
             }
             if (mfc['行情阶段判断']) {
                 text += `行情阶段：${mfc['行情阶段判断']['阶段']}（${mfc['行情阶段判断']['描述']}）\n`;
+                text += `主力利润区间：${mfc['行情阶段判断']['主力利润区间']}\n`;
             }
             if (mfc['目标价推算']) {
-                text += `目标价：普通${mfc['目标价推算']['普通行情(50%)'] || '-'} / 强势${mfc['目标价推算']['强势行情(100%)'] || '-'} / 超级${mfc['目标价推算']['超级行情(200%)'] || '-'}\n`;
+                const mb = mfc['目标价推算'];
+                text += `目标价推算：\n`;
+                text += `  普通行情(50%)：${mb['普通行情(50%)']['下限']} - ${mb['普通行情(50%)']['上限']}\n`;
+                text += `  强势行情(100%)：${mb['强势行情(100%)']['下限']} - ${mb['强势行情(100%)']['上限']}\n`;
+                text += `  超级行情(200%)：${mb['超级行情(200%)']['下限']} - ${mb['超级行情(200%)']['上限']}\n`;
             }
             if (mfc['洗盘区间']) {
                 text += `洗盘区间：${mfc['洗盘区间']['正常洗盘'] ? mfc['洗盘区间']['正常洗盘'][0] + ' - ' + mfc['洗盘区间']['正常洗盘'][1] : '-'}，极限：${mfc['洗盘区间']['极限洗盘'] || '-'}，止损：${mfc['洗盘区间']['止损参考'] || '-'}\n`;
+                text += `参考：60日均线=${mfc['洗盘区间']['60日均线'] || '-'}，筹码峰下沿=${mfc['洗盘区间']['筹码峰下沿'] || '-'}，主力成本区下限=${mfc['洗盘区间']['主力成本区下限'] || '-'}\n`;
                 if (mfc['洗盘区间']['洗盘结构']) {
                     text += `成交量结构：${mfc['洗盘区间']['洗盘结构']['结构判断'] || '-'}（${mfc['洗盘区间']['洗盘结构']['行情性质'] || '-'}）\n`;
                 }
