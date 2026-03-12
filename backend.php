@@ -557,22 +557,40 @@ function logDebug($content, $userId = null) {
     Database::addSystemLog('debug', $content, $userId, $adminId, $ipAddress);
 }
 
-// 检查是否休市时间（对于均线计算，交易日过了9点半就算开盘）
+/**
+ * 检查是否休市时间
+ * 严格判定A股交易时间：
+ * - 上午：09:30 - 11:30
+ * - 下午：13:00 - 15:00
+ * - 周末休市
+ */
 function isMarketClosed() {
     $now = new DateTime('Asia/Shanghai');
-    $hour = (int)$now->format('H');
-    $minute = (int)$now->format('i');
     $dayOfWeek = (int)$now->format('w');
     
-    // 周末休市
-    if ($dayOfWeek == 0 || $dayOfWeek == 6) {
+    // 周末休市（0=周日，6=周六）
+    if ($dayOfWeek === 0 || $dayOfWeek === 6) {
         return true;
     }
     
-    // 对于均线计算，交易日过了9点半就算开盘（即使在中午休市时间）
-    $hasOpenedToday = ($hour > 9 || ($hour == 9 && $minute >= 30));
+    // 获取当前时间戳（仅时分秒）
+    $currentTimeStr = $now->format('H:i:s');
+    $currentTime = strtotime("1970-01-01 $currentTimeStr");
     
-    return !$hasOpenedToday;
+    // 上午交易时间：09:30 - 11:30
+    $morningStart = strtotime("1970-01-01 09:30:00");
+    $morningEnd = strtotime("1970-01-01 11:30:00");
+    
+    // 下午交易时间：13:00 - 15:00
+    $afternoonStart = strtotime("1970-01-01 13:00:00");
+    $afternoonEnd = strtotime("1970-01-01 15:00:00");
+    
+    // 判断是否在交易时间内
+    $isMorningSession = ($currentTime >= $morningStart && $currentTime < $morningEnd);
+    $isAfternoonSession = ($currentTime >= $afternoonStart && $currentTime < $afternoonEnd);
+    
+    // 在交易时间内返回false（不休市），否则返回true（休市）
+    return !($isMorningSession || $isAfternoonSession);
 }
 
 // 尝试从系统设置获取API Key
@@ -979,6 +997,64 @@ function getMoneyFlow($fullCode) {
 }
 
 /**
+ * 获取历史主力资金净流入数据（最近120日）
+ * 东方财富历史资金流向接口
+ * 返回数据按时间从早到晚排序，包含累计净流入
+ */
+function getHistoryMainFundFlow($fullCode, $days = 120) {
+    $historyData = [];
+    try {
+        $code = preg_replace('/[a-z]/i', '', $fullCode);
+        $secid = (strpos($fullCode, 'sh') !== false ? '1.' : '0.') . $code;
+        
+        $url = "https://push2his.eastmoney.com/api/qt/stock/fflow/daykline/get?lmt=0&klt=101&secid={$secid}&fields1=f1,f2,f3,f7&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61,f62,f63,f64,f65";
+        
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        $raw = curl_exec($ch);
+        curl_close($ch);
+        
+        if ($raw) {
+            $data = json_decode($raw, true);
+            if ($data && isset($data['data']['klines'])) {
+                $klines = $data['data']['klines'];
+                
+                foreach ($klines as $kline) {
+                    $parts = explode(',', $kline);
+                    if (count($parts) >= 12) {
+                        $netInflow = isset($parts[1]) ? floatval($parts[1]) : 0;
+                        $historyData[] = [
+                            'date' => $parts[0],
+                            'net' => $netInflow
+                        ];
+                    }
+                }
+                
+                usort($historyData, function($a, $b) {
+                    return strcmp($a['date'], $b['date']);
+                });
+                
+                if (count($historyData) > $days) {
+                    $historyData = array_slice($historyData, -$days);
+                }
+                
+                $cumulative = 0;
+                foreach ($historyData as &$item) {
+                    $cumulative += $item['net'];
+                    $item['sum'] = $cumulative;
+                }
+            }
+        }
+    } catch (Exception $e) {
+        error_log('获取历史主力资金数据失败: ' . $e->getMessage());
+    }
+    return $historyData;
+}
+
+/**
  * 获取K线数据
  */
 function getKLineData($fullCode, $count = 60) {
@@ -1025,6 +1101,8 @@ function getKLineData($fullCode, $count = 60) {
 
 /**
  * 计算技术指标
+ * 修复：避免"重复计算今天"的漏洞
+ * 东方财富K线接口在盘中已包含当天未收盘K线
  */
 function calculateTechnicalIndicators($klineData, $currentPrice, $includeRealTime = true) {
     $indicators = [];
@@ -1034,6 +1112,7 @@ function calculateTechnicalIndicators($klineData, $currentPrice, $includeRealTim
     $closes = array_column($klineData, 'close');
     $highs = array_column($klineData, 'high');
     $lows = array_column($klineData, 'low');
+    $volumes = array_column($klineData, 'volume');
     $dates = array_column($klineData, 'date');
     $n = count($closes);
     
@@ -1043,24 +1122,56 @@ function calculateTechnicalIndicators($klineData, $currentPrice, $includeRealTim
     // 检查今天是否开盘
     $isMarketOpen = !isMarketClosed();
     
-    // EMA5, EMA10, EMA20, EMA30, EMA60
-    $indicators['EMA5'] = calculateEMA($closes, 5, $currentPrice, $includeRealTime && $isMarketOpen);
-    $indicators['EMA10'] = calculateEMA($closes, 10, $currentPrice, $includeRealTime && $isMarketOpen);
-    $indicators['EMA20'] = calculateEMA($closes, 20, $currentPrice, $includeRealTime && $isMarketOpen);
-    $indicators['EMA30'] = calculateEMA($closes, 30, $currentPrice, $includeRealTime && $isMarketOpen);
-    $indicators['EMA60'] = calculateEMA($closes, 60, $currentPrice, $includeRealTime && $isMarketOpen);
+    // 核心修复：正确处理实时价格融合
+    // 检查K线最后一条是否是今天，避免重复计算
+    $today = date('Y-m-d');
+    $lastKlineDate = end($dates);
+    $lastKlineIsToday = ($lastKlineDate === $today);
     
-    // RSI14
-    $indicators['RSI14'] = calculateRSI($closes, 14);
+    // 准备用于计算的数组
+    $calcCloses = $closes;
+    $calcHighs = $highs;
+    $calcLows = $lows;
+    $calcVolumes = $volumes;
     
-    // KDJ
-    $kdj = calculateKDJ($highs, $lows, $closes, 9, 3, 3);
+    if ($includeRealTime && $isMarketOpen && $currentPrice) {
+        if ($lastKlineIsToday) {
+            // 最后一条K线是今天，直接替换收盘价
+            $calcCloses[$n - 1] = $currentPrice;
+            // 同时更新最高最低价（如果实时价格突破）
+            if ($currentPrice > $calcHighs[$n - 1]) {
+                $calcHighs[$n - 1] = $currentPrice;
+            }
+            if ($currentPrice < $calcLows[$n - 1]) {
+                $calcLows[$n - 1] = $currentPrice;
+            }
+        } else {
+            // 最后一条K线不是今天，添加新的一天
+            $calcCloses[] = $currentPrice;
+            $calcHighs[] = $currentPrice;
+            $calcLows[] = $currentPrice;
+            $calcVolumes[] = 0;
+        }
+    }
+    
+    // EMA5, EMA10, EMA20, EMA30, EMA60 - 使用处理后的数据
+    $indicators['EMA5'] = calculateEMA($calcCloses, 5);
+    $indicators['EMA10'] = calculateEMA($calcCloses, 10);
+    $indicators['EMA20'] = calculateEMA($calcCloses, 20);
+    $indicators['EMA30'] = calculateEMA($calcCloses, 30);
+    $indicators['EMA60'] = calculateEMA($calcCloses, 60);
+    
+    // RSI14 - 使用处理后的数据
+    $indicators['RSI14'] = calculateRSI($calcCloses, 14);
+    
+    // KDJ - 使用处理后的数据
+    $kdj = calculateKDJ($calcHighs, $calcLows, $calcCloses, 9, 3, 3);
     $indicators['K'] = $kdj['K'];
     $indicators['D'] = $kdj['D'];
     $indicators['J'] = $kdj['J'];
     
-    // 布林带（20日）
-    $bollinger = calculateBollingerBands($closes, 20);
+    // 布林带（20日）- 使用处理后的数据
+    $bollinger = calculateBollingerBands($calcCloses, 20);
     $indicators['布林带上轨'] = $bollinger['upper'];
     $indicators['布林带中轨'] = $bollinger['middle'];
     $indicators['布林带下轨'] = $bollinger['lower'];
@@ -1074,15 +1185,15 @@ function calculateTechnicalIndicators($klineData, $currentPrice, $includeRealTim
         }
     }
     
-    // MACD指标
-    $macd = calculateMACD($closes);
+    // MACD指标 - 使用处理后的数据
+    $macd = calculateMACD($calcCloses);
     $indicators['MACD_DIF'] = $macd['DIF'];
     $indicators['MACD_DEA'] = $macd['DEA'];
     $indicators['MACD柱'] = $macd['MACD'];
     $indicators['MACD历史'] = $macd['history'];
     
-    // CCI指标
-    $cci = calculateCCI($highs, $lows, $closes, 14);
+    // CCI指标 - 使用处理后的数据
+    $cci = calculateCCI($calcHighs, $calcLows, $calcCloses, 14);
     $indicators['CCI'] = $cci['value'];
     $indicators['CCI历史'] = $cci['history'];
     
@@ -1091,30 +1202,20 @@ function calculateTechnicalIndicators($klineData, $currentPrice, $includeRealTim
 
 /**
  * 计算EMA
+ * 简化版：数据已在 calculateTechnicalIndicators 中预处理
  */
-function calculateEMA($data, $period, $currentPrice = null, $includeRealTime = false) {
+function calculateEMA($data, $period) {
     $n = count($data);
     if ($n < $period) return null;
     
     $multiplier = 2 / ($period + 1);
     
-    // 如果包含实时价格且当前价格有效
-    if ($includeRealTime && $currentPrice) {
-        // 前面的天数少取一天，加上当前价格
-        $startIndex = 1; // 从第2个元素开始，少取一天
-        $ema = array_sum(array_slice($data, $startIndex, $period - 1)) / ($period - 1);
-        // 计算到倒数第二个元素
-        for ($i = $startIndex + $period - 1; $i < $n; $i++) {
-            $ema = ($data[$i] - $ema) * $multiplier + $ema;
-        }
-        // 最后加上当前价格
-        $ema = ($currentPrice - $ema) * $multiplier + $ema;
-    } else {
-        // 原来的计算方式
-        $ema = array_sum(array_slice($data, 0, $period)) / $period;
-        for ($i = $period; $i < $n; $i++) {
-            $ema = ($data[$i] - $ema) * $multiplier + $ema;
-        }
+    // 计算初始SMA
+    $ema = array_sum(array_slice($data, 0, $period)) / $period;
+    
+    // 计算EMA
+    for ($i = $period; $i < $n; $i++) {
+        $ema = ($data[$i] - $ema) * $multiplier + $ema;
     }
     
     return round($ema, 4);
@@ -1730,6 +1831,181 @@ function calculateControlDegreeScoreV2($klineData, $currentPrice, $mainCost, $ch
         '控盘评分' => $totalScore,
         '评分明细' => $scoreDetails,
         '评分规则' => '筹码集中度30分 + 换手率稳定性25分 + 走势独立性20分 + 成本位置25分 = 100分'
+    ];
+}
+
+/**
+ * Volume Profile 主力成本区计算
+ * 核心思想：主力成本 = 筹码密集区（最大成交密度区）
+ * 
+ * 算法原理：
+ * 1. 将每根K线的成交量按价格区间均匀分布
+ * 2. 累计每个价格区间的成交量
+ * 3. 找到成交量最大的密集区作为主力成本区
+ * 
+ * 这比加权平均更合理，因为：
+ * - 机构定增：10元（大资金）
+ * - 吸筹区：8-9元
+ * - 拉升成本：11元
+ * 真实主力成本是 8.5-10 的区间，而不是加权平均值
+ */
+function calculateVolumeProfileCostZone($klineData, $bins = 100) {
+    if (empty($klineData) || count($klineData) < 20) {
+        return null;
+    }
+    
+    $allHighs = array_column($klineData, 'high');
+    $allLows = array_column($klineData, 'low');
+    $allVolumes = array_column($klineData, 'volume');
+    $allAmounts = array_column($klineData, 'amount');
+    
+    $globalHigh = max($allHighs);
+    $globalLow = min($allLows);
+    
+    if ($globalHigh <= $globalLow) {
+        return null;
+    }
+    
+    $priceRange = $globalHigh - $globalLow;
+    $binWidth = $priceRange / $bins;
+    
+    $volumeProfile = array_fill(0, $bins, 0);
+    $amountProfile = array_fill(0, $bins, 0);
+    
+    $totalData = count($klineData);
+    $decayFactor = 0.995;
+    
+    foreach ($klineData as $idx => $kline) {
+        $high = $kline['high'];
+        $low = $kline['low'];
+        $volume = $kline['volume'];
+        $amount = isset($kline['amount']) ? $kline['amount'] : ($volume * ($high + $low) / 2);
+        
+        $daysFromNow = $totalData - $idx - 1;
+        $timeWeight = pow($decayFactor, $daysFromNow);
+        
+        $klineRange = $high - $low;
+        if ($klineRange <= 0) {
+            $binIdx = min((int)(($high - $globalLow) / $binWidth), $bins - 1);
+            $binIdx = max(0, $binIdx);
+            $volumeProfile[$binIdx] += $volume * $timeWeight;
+            $amountProfile[$binIdx] += $amount * $timeWeight;
+        } else {
+            $lowBin = max(0, (int)(($low - $globalLow) / $binWidth));
+            $highBin = min($bins - 1, (int)(($high - $globalLow) / $binWidth));
+            
+            $binsInKline = $highBin - $lowBin + 1;
+            if ($binsInKline <= 0) $binsInKline = 1;
+            
+            $volumePerBin = $volume / $binsInKline;
+            $amountPerBin = $amount / $binsInKline;
+            
+            for ($b = $lowBin; $b <= $highBin; $b++) {
+                $volumeProfile[$b] += $volumePerBin * $timeWeight;
+                $amountProfile[$b] += $amountPerBin * $timeWeight;
+            }
+        }
+    }
+    
+    $totalVolume = array_sum($volumeProfile);
+    if ($totalVolume <= 0) {
+        return null;
+    }
+    
+    $maxVolume = max($volumeProfile);
+    $maxBinIdx = array_search($maxVolume, $volumeProfile);
+    
+    $pocPrice = $globalLow + ($maxBinIdx + 0.5) * $binWidth;
+    
+    $valueAreaPercent = 0.70;
+    $targetVolume = $totalVolume * $valueAreaPercent;
+    
+    $sortedBins = [];
+    foreach ($volumeProfile as $idx => $vol) {
+        $sortedBins[] = ['idx' => $idx, 'volume' => $vol];
+    }
+    usort($sortedBins, function($a, $b) {
+        return $b['volume'] <=> $a['volume'];
+    });
+    
+    $valueAreaBins = [];
+    $accumulatedVolume = 0;
+    foreach ($sortedBins as $bin) {
+        $valueAreaBins[] = $bin['idx'];
+        $accumulatedVolume += $bin['volume'];
+        if ($accumulatedVolume >= $targetVolume) {
+            break;
+        }
+    }
+    
+    sort($valueAreaBins);
+    
+    $valueAreaLow = $globalLow + (min($valueAreaBins)) * $binWidth;
+    $valueAreaHigh = $globalLow + (max($valueAreaBins) + 1) * $binWidth;
+    
+    $continuousZones = [];
+    $currentZone = [$valueAreaBins[0]];
+    
+    for ($i = 1; $i < count($valueAreaBins); $i++) {
+        if ($valueAreaBins[$i] == $valueAreaBins[$i-1] + 1) {
+            $currentZone[] = $valueAreaBins[$i];
+        } else {
+            $continuousZones[] = $currentZone;
+            $currentZone = [$valueAreaBins[$i]];
+        }
+    }
+    $continuousZones[] = $currentZone;
+    
+    usort($continuousZones, function($a, $b) use ($volumeProfile) {
+        $volA = array_sum(array_map(function($idx) use ($volumeProfile) { return $volumeProfile[$idx]; }, $a));
+        $volB = array_sum(array_map(function($idx) use ($volumeProfile) { return $volumeProfile[$idx]; }, $b));
+        return $volB <=> $volA;
+    });
+    
+    $mainCostZone = $continuousZones[0];
+    $mainCostLow = $globalLow + min($mainCostZone) * $binWidth;
+    $mainCostHigh = $globalLow + (max($mainCostZone) + 1) * $binWidth;
+    $mainCostMid = ($mainCostLow + $mainCostHigh) / 2;
+    
+    $zoneVolume = 0;
+    foreach ($mainCostZone as $idx) {
+        $zoneVolume += $volumeProfile[$idx];
+    }
+    $zoneVolumePercent = $zoneVolume / $totalVolume * 100;
+    
+    $profileData = [];
+    for ($i = 0; $i < $bins; $i++) {
+        $priceLow = $globalLow + $i * $binWidth;
+        $priceHigh = $globalLow + ($i + 1) * $binWidth;
+        $volPercent = $volumeProfile[$i] / $totalVolume * 100;
+        
+        $profileData[] = [
+            'price_low' => round($priceLow, 2),
+            'price_high' => round($priceHigh, 2),
+            'volume' => round($volumeProfile[$i], 0),
+            'percent' => round($volPercent, 2),
+            'is_poc' => $i == $maxBinIdx,
+            'is_value_area' => in_array($i, $valueAreaBins)
+        ];
+    }
+    
+    return [
+        '主力成本区' => [
+            '下限' => round($mainCostLow, 2),
+            '上限' => round($mainCostHigh, 2),
+            '中值' => round($mainCostMid, 2),
+            '区间宽度' => round($mainCostHigh - $mainCostLow, 2),
+            '成交量占比' => round($zoneVolumePercent, 2) . '%'
+        ],
+        'POC价格' => round($pocPrice, 2),
+        '价值区域' => [
+            '下限' => round($valueAreaLow, 2),
+            '上限' => round($valueAreaHigh, 2),
+            '成交量占比' => '70%'
+        ],
+        '分布详情' => $profileData,
+        '计算方法' => 'Volume Profile - 筹码密集区算法',
+        '算法说明' => '主力成本区 = 成交量最大的连续价格区间，比加权平均更准确反映真实成本分布'
     ];
 }
 
@@ -2397,9 +2673,18 @@ function analyzeWashStructure($klineData, $currentPrice, $stockCode = '') {
 }
 
 /**
- * 推算主力成本区 V2.0
- * 多层成本结构模型：机构成本 → 市场成本 → 拉升成本
- * 权重分配：机构35%, VWAP25%, 筹码25%, 启动15%
+ * 推算主力成本区 V3.0
+ * 核心改进：使用 Volume Profile 筹码密集区算法替代加权平均
+ * 
+ * V2.0问题：加权平均在金融上不合理
+ * - 主力成本不是平均值，而是成本分布区
+ * - 例如：机构定增10元、吸筹区8-9元、拉升成本11元
+ * - 真实主力成本是 8.5-10 的区间，而不是加权平均值
+ * 
+ * V3.0改进：
+ * - 主力成本区 = 筹码密集区（Volume Profile）
+ * - 计算方法：统计K线成交额分布，找最大成交密度区
+ * - 输出：主力成本区间 [下限, 上限]
  */
 function calculateMainForceCostZone($klineData, $currentPrice, $placementData = [], $indexCloses = [], $turnovers = []) {
     $costAnalysis = [
@@ -2407,6 +2692,7 @@ function calculateMainForceCostZone($klineData, $currentPrice, $placementData = 
         'VWAP成本' => null,
         '筹码成本' => null,
         '启动成本' => null,
+        'VolumeProfile成本区' => null,
         '综合主力成本' => null,
         '主力盈利比例' => null,
         '目标价推算' => null,
@@ -2561,167 +2847,325 @@ function calculateMainForceCostZone($klineData, $currentPrice, $placementData = 
         ];
     }
     
-    $baseWeights = [
-        'institution' => 35,
-        'vwap' => 25,
-        'chip' => 25,
-        'trend' => 15
+    $volumeProfileData = calculateVolumeProfileCostZone($klineData);
+    $mainCostLow = null;
+    $mainCostHigh = null;
+    $mainCostMid = null;
+    
+    if ($volumeProfileData !== null) {
+        $costAnalysis['VolumeProfile成本区'] = $volumeProfileData;
+        $mainCostLow = $volumeProfileData['主力成本区']['下限'];
+        $mainCostHigh = $volumeProfileData['主力成本区']['上限'];
+        $mainCostMid = $volumeProfileData['主力成本区']['中值'];
+    }
+    
+    $longTermSupport = [];
+    
+    $finalCostLow = $mainCostLow;
+    $finalCostHigh = $mainCostHigh;
+    $finalCostMid = $mainCostMid;
+    
+    $vpMid = $mainCostMid;
+    $vpHigh = $mainCostHigh;
+    $vpLow = $mainCostLow;
+    
+    // --- 1. 变量初始化，确保与后续代码完全兼容 ---
+    $weightedCenter = 0;
+    $weightSum = 0;
+    $costItemsForWidth = []; 
+    $longTermSupport = [];   
+    $widthAdjusted = false; // <--- 补上这个初始化，解决报错问题
+
+    // 设定活跃阈值：低于现价 35% 的成本项被视为“历史沉淀”
+    $activeThreshold = $currentPrice * 0.65; 
+
+    $components = [
+        ['name' => 'VP成本区', 'mid' => $vpMid, 'low' => $vpLow, 'high' => $vpHigh, 'w' => 0.56],
+        ['name' => 'VWAP成本', 'mid' => $vwapCost, 'low' => $vwapCost, 'high' => $vwapCost, 'w' => 0.11],
+        ['name' => '筹码成本', 'mid' => $chipCost, 'low' => $chipCost, 'high' => $chipCost, 'w' => 0.22],
+        ['name' => '启动成本', 'mid' => $trendCost, 'low' => $trendCost, 'high' => $trendCost, 'w' => 0.11]
     ];
-    
-    $costComponents = [];
-    $weightedSum = 0;
-    $rawWeightSum = 0;
-    
-    if ($institutionCost !== null) {
-        $costComponents[] = ['cost' => $institutionCost, 'rawWeight' => $baseWeights['institution'], 'name' => '机构成本'];
-        $weightedSum += $institutionCost * $baseWeights['institution'];
-        $rawWeightSum += $baseWeights['institution'];
+
+    // --- 2. 权重过滤与计算 ---
+    foreach ($components as $item) {
+        if ($item['mid'] === null || $item['mid'] <= 0) continue;
+
+        if ($item['high'] < $activeThreshold) {
+            $longTermSupport[] = [
+                'name' => $item['name'],
+                'cost' => $item['mid'],
+                'high' => $item['high'],
+                'reason' => '历史沉淀筹码，仅作支撑参考'
+            ];
+        } else {
+            $weightedCenter += $item['mid'] * $item['w'];
+            $weightSum += $item['w'];
+            $costItemsForWidth[] = [
+                'name' => $item['name'], 
+                'mid' => $item['mid'], 
+                'low' => $item['low'], 
+                'high' => $item['high'], 
+                'weight' => $item['w']
+            ];
+        }
     }
-    
-    if ($vwapCost !== null) {
-        $costComponents[] = ['cost' => $vwapCost, 'rawWeight' => $baseWeights['vwap'], 'name' => 'VWAP成本'];
-        $weightedSum += $vwapCost * $baseWeights['vwap'];
-        $rawWeightSum += $baseWeights['vwap'];
-    }
-    
-    if ($chipCost !== null) {
-        $costComponents[] = ['cost' => $chipCost, 'rawWeight' => $baseWeights['chip'], 'name' => '筹码成本'];
-        $weightedSum += $chipCost * $baseWeights['chip'];
-        $rawWeightSum += $baseWeights['chip'];
-    }
-    
-    if ($trendCost !== null) {
-        $costComponents[] = ['cost' => $trendCost, 'rawWeight' => $baseWeights['trend'], 'name' => '启动成本'];
-        $weightedSum += $trendCost * $baseWeights['trend'];
-        $rawWeightSum += $baseWeights['trend'];
-    }
-    
-    if ($rawWeightSum > 0) {
-        $mainCost = $weightedSum / $rawWeightSum;
-        $allCosts = array_column($costComponents, 'cost');
-        $minCost = min($allCosts);
-        $maxCost = max($allCosts);
+
+    // --- 3. 区间生成与宽度限制 ---
+    if ($weightSum > 0) {
+        $finalCostMid = $weightedCenter / $weightSum;
         
+        // 1. 先确定一个基础宽度（比如 10%）
+        $baseSpread = 0.10;
+        
+        // 2. 核心：基于中值生成初始上下限
+        $tempLow = $finalCostMid * (1 - $baseSpread);
+        $tempHigh = $finalCostMid * (1 + $baseSpread);
+
+        // 3. 动态调整：如果筹码成本（实战位）存在，强制拉高中值感知的区间
+        if ($chipCost > 0) {
+            // 下限参考：取“理论计算下限”和“筹码位打 9 折”中的较小值，确保空间
+            $finalCostLow = min($tempLow, $chipCost * 0.92);
+            // 上限参考：取“理论计算上限”和“筹码位打 1.1 倍”中的较大值
+            $finalCostHigh = max($tempHigh, $chipCost * 1.08);
+        } else {
+            $finalCostLow = $tempLow;
+            $finalCostHigh = $tempHigh;
+        }
+
+        // 4. 最终校准：确保不会出现 Low > High 的极端情况
+        if ($finalCostLow > $finalCostHigh) {
+            $tmp = $finalCostLow;
+            $finalCostLow = $finalCostHigh;
+            $finalCostHigh = $tmp;
+        }
+
+        // 5. 目标价推算逻辑同步修正（在这里就排好序）
+        $targetLow = $finalCostLow * 1.5;
+        $targetHigh = $finalCostHigh * 1.5;
+        // 确保目标价也是小数在前
+        $costAnalysis['目标价推算']['普通行情(50%)'] = [
+            '下限' => round(min($targetLow, $targetHigh), 2),
+            '中值' => round($finalCostMid * 1.5, 2),
+            '上限' => round(max($targetLow, $targetHigh), 2)
+        ];
+
+        // 6. 保护：上限不越过现价（如果是成本区的话）
+        $finalCostHigh = min($finalCostHigh, $currentPrice * 0.99);
+        $finalCostMid = ($finalCostLow + $finalCostHigh) / 2;
+
+    } else {
+        // 兜底逻辑
+        $finalCostMid = $currentPrice * 0.85;
+        $finalCostLow = $finalCostMid * 0.92;
+        $finalCostHigh = $finalCostMid * 1.05;
+        $widthAdjusted = false;
+    }
+    
+    if ($finalCostMid !== null && $finalCostMid > 0) {
         $costBasis = [];
-        foreach ($costComponents as $comp) {
-            $normalizedWeight = round($comp['rawWeight'] / $rawWeightSum * 100, 1);
-            $costBasis[] = $comp['name'] . '(' . $normalizedWeight . '%)';
+        $weightDetails = [];
+        
+        foreach ($costItemsForWidth as $item) {
+            $costBasis[] = $item['name'] . '(' . round($item['weight'] / $weightSum * 100, 0) . '%)';
+            $weightDetails[] = $item['name'] . ':' . round($item['weight'] / $weightSum * 100, 0) . '%';
+        }
+        
+        $algorithmNote = '加权中心点算法(VP:56%, VWAP:11%, 筹码:22%, 启动:11%) + 动态宽度±12.5%';
+        if ($widthAdjusted) {
+            $algorithmNote .= '（宽度已限制在现价40%内）';
         }
         
         $costAnalysis['综合主力成本'] = [
-            '主力成本' => round($mainCost, 2),
-            '成本区间' => [round($minCost, 2), round($maxCost, 2)],
-            '权重分配' => implode(' + ', $costBasis),
-            '计算方式' => '加权平均（权重已归一化）',
-            '原始权重基准' => '机构35% + VWAP25% + 筹码25% + 启动15%'
+            '主力成本区' => [
+                '下限' => round($finalCostLow, 2),
+                '上限' => round($finalCostHigh, 2),
+                '中值' => round($finalCostMid, 2)
+            ],
+            '成本区间宽度' => round($finalCostHigh - $finalCostLow, 2),
+            '宽度占比' => round(($finalCostHigh - $finalCostLow) / $currentPrice * 100, 1) . '%',
+            '参考依据' => implode(' + ', $costBasis),
+            '权重分配' => implode(', ', $weightDetails),
+            '计算方式' => $algorithmNote,
+            '算法说明' => '加权中心点 = VP×56% + VWAP×11% + 筹码×22% + 启动×11%，近期化处理：低于现价30%的成本项仅作支撑参考'
         ];
         
-        if ($mainCost > 0) {
-            $profitRatio = ($currentPrice - $mainCost) / $mainCost * 100;
-            
-            $costAnalysis['主力盈利比例'] = [
-                '盈利比例' => round($profitRatio, 2) . '%',
-                '当前价格' => $currentPrice,
-                '主力成本' => round($mainCost, 2)
-            ];
-            
-            $costAnalysis['目标价推算'] = [
-                '普通行情(50%)' => round($mainCost * 1.5, 2),
-                '强势行情(100%)' => round($mainCost * 2.0, 2),
-                '超级行情(200%)' => round($mainCost * 3.0, 2)
-            ];
-            
-            if ($profitRatio < 0) {
-                $stage = '深度套牢区';
-                $stageDesc = '主力利润为负，处于深度套牢或建仓阶段';
-            } elseif ($profitRatio < 30) {
-                $stage = '建仓区';
-                $stageDesc = '主力开始盈利，处于建仓完成期';
-            } elseif ($profitRatio < 80) {
-                $stage = '主升区';
-                $stageDesc = '主力盈利可观，处于主升浪阶段';
-            } elseif ($profitRatio < 150) {
-                $stage = '加速区';
-                $stageDesc = '主力盈利丰厚，处于加速上涨阶段';
+        if (!empty($longTermSupport)) {
+            $supportInfo = [];
+            foreach ($longTermSupport as $s) {
+                $supportText = $s['name'] . ': 上限' . round($s['high'], 2);
+                if (isset($s['cost'])) {
+                    $supportText .= ', 中值' . round($s['cost'], 2);
+                }
+                $supportText .= ' (' . $s['reason'] . ')';
+                $supportInfo[] = $supportText;
+            }
+            $costAnalysis['长线支撑位'] = $supportInfo;
+        }
+        
+        $profitRatioLow = ($currentPrice - $finalCostHigh) / $finalCostHigh * 100;
+        $profitRatioMid = ($currentPrice - $finalCostMid) / $finalCostMid * 100;
+        $profitRatioHigh = ($currentPrice - $finalCostLow) / $finalCostLow * 100;
+        
+
+        
+        $costAnalysis['目标价推算'] = [
+            '普通行情(50%)' => [
+                '下限' => round($finalCostLow * 1.5, 2),
+                '中值' => round($finalCostMid * 1.5, 2),
+                '上限' => round($finalCostHigh * 1.5, 2)
+            ],
+            '强势行情(100%)' => [
+                '下限' => round($finalCostLow * 2.0, 2),
+                '中值' => round($finalCostMid * 2.0, 2),
+                '上限' => round($finalCostHigh * 2.0, 2)
+            ],
+            '超级行情(200%)' => [
+                '下限' => round($finalCostLow * 3.0, 2),
+                '中值' => round($finalCostMid * 3.0, 2),
+                '上限' => round($finalCostHigh * 3.0, 2)
+            ]
+        ];
+        
+        // --- 逻辑优化：引入趋势与位置判断 ---
+        $currentPrice = $marketData['current_price'] ?? 0;
+        $priceChange = $marketData['change_percent'] ?? 0; // 当日涨跌幅
+        
+        // 计算当前价格在成本区间的位置 (0表示在下限，1表示在上限)
+        $range = $finalCostHigh - $finalCostLow;
+        $position = ($range > 0) ? ($currentPrice - $finalCostLow) / $range : 0;
+
+        // 基础逻辑判断
+        if ($profitRatioMid < -15) {
+            $stage = '崩盘/冰点区';
+            $stageDesc = '主力与散户同步深套。若伴随缩量，则处于非理性杀跌末端；若放量，则是主力割肉踩踏。';
+        } elseif ($profitRatioMid < -5) {
+            $stage = '主力受压区';
+            $stageDesc = '股价跌破核心成本。主力处于浮亏，若无法快速回抽，可能演变为中期弱势。';
+        } elseif ($profitRatioMid < 5) {
+            $stage = '底部筑底区';
+            $stageDesc = '价格在成本线附近反复摩擦。主力正在进行最后的筹码交换，关注方向选择。';
+        } elseif ($profitRatioMid < 25) {
+            // 刚脱离成本，如果今天大跌，就是回踩
+            if ($priceChange < -3) {
+                $stage = '启动回踩区';
+                $stageDesc = '脱离成本后的技术性回踩。只要不跌破成本下限 ' . round($finalCostLow, 2) . '，仍属正常洗盘。';
             } else {
-                $stage = '派发风险区';
-                $stageDesc = '主力利润极高，需警惕派发风险';
+                $stage = '脱离成本/吸筹结束';
+                $stageDesc = '主力初步脱离盈亏平衡点，开始尝试向上推升，市场信心逐步恢复。';
             }
-            
-            $costAnalysis['行情阶段判断'] = [
-                '阶段' => $stage,
-                '描述' => $stageDesc,
-                '主力利润' => round($profitRatio, 2) . '%'
-            ];
-            
-            $ma60 = null;
-            if ($n >= 60) {
-                $ma60 = array_sum(array_slice($closes, -60)) / 60;
-            } elseif ($n >= 20) {
-                $ma60 = array_sum(array_slice($closes, -20)) / 20;
+        } elseif ($profitRatioMid < 80) {
+            // --- 关键修正：主升区 vs 高位回落区 ---
+            // 如果价格已经从成本区上限回落较多，或者当日大跌
+            if ($priceChange < -2 || $position < 0.8) {
+                $stage = '高位震荡/获利回吐';
+                $stageDesc = '主力利润仍较丰厚，但短期走势转弱。连续调整显示上方抛压加大，警惕趋势反转。';
+            } else {
+                $stage = '加速主升区';
+                $stageDesc = '主力进入利润舒适区，趋势力量最强。此阶段应持股待涨，不轻易下车。';
             }
-            
-            $chipPeakLow = null;
-            if (!empty($chipDistribution)) {
-                foreach ($chipDistribution as $chip) {
-                    $priceRange = explode('-', $chip['价格区间']);
-                    if (count($priceRange) == 2) {
-                        $lowPrice = floatval($priceRange[0]);
-                        if ($chipPeakLow === null || $lowPrice < $chipPeakLow) {
-                            $chipPeakLow = $lowPrice;
-                        }
+        } elseif ($profitRatioMid < 150) {
+            if ($priceChange < -1) {
+                $stage = '高位减仓/筑顶';
+                $stageDesc = '极高利润下的调整。主力随时可能反手做空，近期连续波动是明显的派发信号。';
+            } else {
+                $stage = '超额收益区';
+                $stageDesc = '主力利润已极其惊人，随时可能出现断头铡刀式下跌，建议只卖不买。';
+            }
+        } else {
+            $stage = '疯狂派发区';
+            $stageDesc = '行情进入最后的疯狂阶段。主力通过大幅波动吸引跟风盘，筹码正大规模转移给散户。';
+        }
+
+        // 修正盈利比例显示的映射错误
+        $costAnalysis['主力盈利比例'] = [
+            '盈利比例区间' => [
+                '下限' => round($profitRatioLow, 2) . '%', 
+                '中值' => round($profitRatioMid, 2) . '%',
+                '上限' => round($profitRatioHigh, 2) . '%'
+            ],
+            '当前价格' => $currentPrice,
+            '主力成本区' => round($finalCostLow, 2) . ' - ' . round($finalCostHigh, 2)
+        ];
+
+        $costAnalysis['行情阶段判断'] = [
+            '阶段' => $stage,
+            '描述' => $stageDesc,
+            '主力利润区间' => round($profitRatioLow, 2) . '% ~ ' . round($profitRatioHigh, 2) . '%',
+            '位置预警' => ($position > 0.9) ? '处于成本区上缘(偏强)' : (($position < 0.1) ? '处于成本区下缘(偏弱)' : '区间中段'),
+            '说明' => '结合价格走势与主力成本的动态分析'
+        ];
+        
+        $ma60 = null;
+        if ($n >= 60) {
+            $ma60 = array_sum(array_slice($closes, -60)) / 60;
+        } elseif ($n >= 20) {
+            $ma60 = array_sum(array_slice($closes, -20)) / 20;
+        }
+        
+        $chipPeakLow = null;
+        if (!empty($chipDistribution)) {
+            foreach ($chipDistribution as $chip) {
+                $priceRange = explode('-', $chip['价格区间']);
+                if (count($priceRange) == 2) {
+                    $lowPrice = floatval($priceRange[0]);
+                    if ($chipPeakLow === null || $lowPrice < $chipPeakLow) {
+                        $chipPeakLow = $lowPrice;
                     }
                 }
             }
-            
-            $stageHigh = max(array_slice($highs, -60));
-            
-            $washCandidates = [];
-            if ($ma60 !== null) {
-                $washCandidates[] = round($ma60, 2);
-            }
-            if ($chipPeakLow !== null) {
-                $washCandidates[] = round($chipPeakLow, 2);
-            }
-            
-            if (!empty($washCandidates)) {
-                $washLow = max($washCandidates);
-            } else {
-                $washLow = round($mainCost * 1.05, 2);
-            }
-            
-            $washHigh = round($stageHigh * 0.95, 2);
-            
-            if ($washHigh < $washLow) {
-                $washHigh = round($currentPrice * 0.95, 2);
-            }
-            
-            $extremeWash = round($mainCost * 1.05, 2);
-            $stopLoss = round($mainCost * 0.98, 2);
-            
-            $washStructure = analyzeWashStructure($klineData, $currentPrice);
-            
-            $costAnalysis['洗盘区间'] = [
-                '正常洗盘' => [round($washLow, 2), round($washHigh, 2)],
-                '极限洗盘' => $extremeWash,
-                '止损参考' => $stopLoss,
-                '60日均线' => $ma60 !== null ? round($ma60, 2) : null,
-                '筹码峰下沿' => $chipPeakLow !== null ? round($chipPeakLow, 2) : null,
-                '阶段高点(60日)' => round($stageHigh, 2),
-                '洗盘结构' => $washStructure,
-                '说明' => '洗盘下限 = max(60日均线, 筹码峰下沿)；洗盘上限 = 阶段高点×0.95'
-            ];
-            
-            $mainCostValue = $costAnalysis['综合主力成本']['主力成本'] ?? $currentPrice;
-            $costAnalysis['控盘度评分'] = calculateControlDegreeScoreV2(
-                $klineData, 
-                $currentPrice, 
-                $mainCostValue,
-                $chipDistribution,
-                $indexCloses,
-                $turnovers
-            );
         }
+        
+        $stageHigh = max(array_slice($highs, -60));
+        
+        $washCandidates = [];
+        if ($ma60 !== null) {
+            $washCandidates[] = round($ma60, 2);
+        }
+        if ($chipPeakLow !== null) {
+            $washCandidates[] = round($chipPeakLow, 2);
+        }
+        if ($finalCostLow !== null) {
+            $washCandidates[] = round($finalCostLow, 2);
+        }
+        
+        if (!empty($washCandidates)) {
+            $washLow = max($washCandidates);
+        } else {
+            $washLow = round($finalCostMid * 1.05, 2);
+        }
+        
+        $washHigh = round($stageHigh * 0.95, 2);
+        
+        if ($washHigh < $washLow) {
+            $washHigh = round($currentPrice * 0.95, 2);
+        }
+        
+        $extremeWash = round($finalCostLow * 1.02, 2);
+        $stopLoss = round($finalCostLow * 0.98, 2);
+        
+        $washStructure = analyzeWashStructure($klineData, $currentPrice);
+        
+        $costAnalysis['洗盘区间'] = [
+            '正常洗盘' => [round($washLow, 2), round($washHigh, 2)],
+            '极限洗盘' => $extremeWash,
+            '止损参考' => $stopLoss,
+            '60日均线' => $ma60 !== null ? round($ma60, 2) : null,
+            '筹码峰下沿' => $chipPeakLow !== null ? round($chipPeakLow, 2) : null,
+            '主力成本区下限' => round($finalCostLow, 2),
+            '阶段高点(60日)' => round($stageHigh, 2),
+            '洗盘结构' => $washStructure,
+            '说明' => '洗盘下限 = max(60日均线, 筹码峰下沿, 主力成本区下限)；洗盘上限 = 阶段高点×0.95'
+        ];
+        
+        $mainCostValue = $finalCostMid;
+        $costAnalysis['控盘度评分'] = calculateControlDegreeScoreV2(
+            $klineData, 
+            $currentPrice, 
+            $mainCostValue,
+            $chipDistribution,
+            $indexCloses,
+            $turnovers
+        );
     }
     
     return $costAnalysis;
@@ -3060,6 +3504,56 @@ try {
     $moneyFlowData = [];
 }
 
+// 获取历史主力资金净流入数据（最近120日）
+$historyMainFundData = [];
+try {
+    $historyMainFundData = getHistoryMainFundFlow($fullCode, 120);
+    
+    // 将当天的主力资金数据加入历史数据
+    if (!empty($moneyFlowData) && isset($moneyFlowData['主力净流入'])) {
+        $today = date('Y-m-d');
+        $todayNetInflow = floatval($moneyFlowData['主力净流入']) * 10000; // 转换为元
+        
+        // 检查今天是否已在历史数据中
+        $todayExists = false;
+        foreach ($historyMainFundData as &$item) {
+            if ($item['date'] === $today) {
+                $item['net'] = $todayNetInflow;
+                $todayExists = true;
+                break;
+            }
+        }
+        
+        // 如果今天不在历史数据中，添加今天的数据
+        if (!$todayExists) {
+            $historyMainFundData[] = [
+                'date' => $today,
+                'net' => $todayNetInflow
+            ];
+        }
+        
+        // 重新按日期排序
+        usort($historyMainFundData, function($a, $b) {
+            return strcmp($a['date'], $b['date']);
+        });
+        
+        // 如果超过120日，截取最近120日
+        if (count($historyMainFundData) > 120) {
+            $historyMainFundData = array_slice($historyMainFundData, -120);
+        }
+        
+        // 重新计算累计净流入
+        $cumulative = 0;
+        foreach ($historyMainFundData as &$item) {
+            $cumulative += $item['net'];
+            $item['sum'] = $cumulative;
+        }
+    }
+} catch (Exception $e) {
+    error_log('获取历史主力资金数据失败: ' . $e->getMessage());
+    $historyMainFundData = [];
+}
+
 // 发送进度信息：资金流向获取完成，正在获取分时图数据...
 sendProgress(45, '资金流向获取完成，正在获取分时图数据...');
 
@@ -3168,6 +3662,7 @@ sendProgress(55, '股票最新资讯获取完成，正在准备AI分析...');
 $enhancedMarketData = array_merge($marketData, [
     '板块信息' => $sectorData,
     '资金流向' => $moneyFlowData,
+    '历史主力资金' => $historyMainFundData,
     '技术指标' => $technicalIndicators,
     '港股信息' => $hkData,
     '主力成本区' => $mainForceCostData
@@ -3224,9 +3719,19 @@ if (!empty($minuteData)) {
 // 构建最新资讯和详细资讯
 $userPrompt .= "8. 最新资讯：" . json_encode($stockNews, JSON_UNESCAPED_UNICODE) . "\n";
 
-// 添加主力成本区数据
+// 添加主力成本区数据（只传递原始数据，不传递分析结果，让AI自己判断）
 if (!empty($mainForceCostData)) {
-    $userPrompt .= "9. 主力成本区分析数据：" . json_encode($mainForceCostData, JSON_UNESCAPED_UNICODE) . "\n";
+    $aiMainForceCostData = [];
+    $rawDataFields = ['机构成本', 'VWAP成本', '筹码成本', '启动成本', 'VolumeProfile成本区', '筹码分布'];
+    foreach ($rawDataFields as $field) {
+        if (isset($mainForceCostData[$field]) && $mainForceCostData[$field] !== null) {
+            $aiMainForceCostData[$field] = $mainForceCostData[$field];
+        }
+    }
+    if (!empty($aiMainForceCostData)) {
+        $userPrompt .= "9. 主力成本区原始数据：" . json_encode($aiMainForceCostData, JSON_UNESCAPED_UNICODE) . "\n";
+        $userPrompt .= "   说明：以上为原始成本数据，请根据这些数据自行分析主力成本区间、行情阶段、盈利比例等，不要依赖预计算的分析结果。\n";
+    }
 }
 
 // 添加近两日包含股票名称或代码的资讯详情
