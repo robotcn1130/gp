@@ -3907,7 +3907,7 @@ $analysisId = Database::saveStockAnalysis(
     $cost, 
     $cash, 
     $model, 
-    json_encode($marketData), 
+    json_encode($enhancedMarketData), 
     json_encode($shIndexData), 
     json_encode($stockNews), 
     $aiResult,
