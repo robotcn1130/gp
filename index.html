@@ -2480,44 +2480,74 @@
             
             output.innerHTML = "";
             fullContentBuffer = ''; // 重置完整内容缓冲区
+            let streamBuffer = ''; // 用于合并数据流缓冲
 
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
                 
                 const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-
-                for (let line of lines) {
-                    if (line.startsWith('PROGRESS:')) {
-                        console.log('收到PROGRESS行:', line);
-                        try {
-                            const progressData = JSON.parse(line.replace('PROGRESS:', ''));
-                            console.log('解析后的PROGRESS数据:', progressData);
+                streamBuffer += chunk;
+                
+                // 处理缓冲区中的完整行
+                while (true) {
+                    // 查找DATA:开头的行
+                    const dataIdx = streamBuffer.indexOf('DATA:');
+                    if (dataIdx !== -1) {
+                        // 提取DATA:之后的内容
+                        const dataContent = streamBuffer.substring(dataIdx + 5);
+                        
+                        // 尝试解析JSON，找到完整的JSON对象
+                        let braceCount = 0;
+                        let jsonEndIdx = -1;
+                        let inString = false;
+                        let escapeNext = false;
+                        
+                        for (let i = 0; i < dataContent.length; i++) {
+                            const char = dataContent[i];
                             
-                            // 更新进度条
-                            updateProgress(progressData.percentage, progressData.message);
-                            
-                            // 如果需要隐藏进度条
-                            if (progressData.hide) {
-                                setTimeout(() => {
-                                    progressBarContainer.classList.add('hidden');
-                                }, 1000);
-                                // 分析完成，自动刷新用户积分
-                                refreshUserInfo();
+                            if (escapeNext) {
+                                escapeNext = false;
+                                continue;
                             }
-                        } catch (error) {
-                            console.error('解析PROGRESS数据失败:', error);
-                            console.error('原始PROGRESS行:', line);
+                            
+                            if (char === '\\' && inString) {
+                                escapeNext = true;
+                                continue;
+                            }
+                            
+                            if (char === '"') {
+                                inString = !inString;
+                                continue;
+                            }
+                            
+                            if (!inString) {
+                                if (char === '{') braceCount++;
+                                else if (char === '}') {
+                                    braceCount--;
+                                    if (braceCount === 0) {
+                                        jsonEndIdx = i + 1;
+                                        break;
+                                    }
+                                }
+                            }
                         }
-                    } else if (line.startsWith('ANALYSIS_ID:')) {
-                        const analysisId = line.replace('ANALYSIS_ID:', '');
-                        console.log('收到分析ID:', analysisId);
-                        currentAnalysisData.id = analysisId;
-                    } else if (line.startsWith('DATA:')) {
-                        console.log('收到DATA行:', line);
+                        
+                        if (jsonEndIdx === -1) {
+                            // JSON不完整，等待更多数据
+                            break;
+                        }
+                        
+                        // 提取完整的JSON字符串
+                        const jsonStr = dataContent.substring(0, jsonEndIdx);
+                        const fullLine = 'DATA:' + jsonStr;
+                        
+                        // 从缓冲区移除已处理的数据
+                        streamBuffer = streamBuffer.substring(dataIdx + 5 + jsonEndIdx);
+                        
+                        // 处理DATA行
                         try {
-                            const data = JSON.parse(line.replace('DATA:', ''));
+                            const data = JSON.parse(jsonStr);
                             console.log('解析后的DATA数据:', data);
                             
                             // 检查数据结构
@@ -2561,9 +2591,48 @@
                             }
                         } catch (error) {
                             console.error('解析DATA数据失败:', error);
-                            console.error('原始DATA行:', line);
+                            console.error('原始DATA内容:', jsonStr.substring(0, 500) + '...');
                             fullDataTable.innerHTML = `<div class="text-red-500">解析数据失败: ${error.message}</div>`;
                         }
+                        
+                        continue; // 继续处理缓冲区中的其他数据
+                    }
+                    
+                    // 处理其他类型的行（PROGRESS, ANALYSIS_ID, TEXT等）
+                    const newlineIdx = streamBuffer.indexOf('\n');
+                    if (newlineIdx === -1) {
+                        // 没有完整的行，等待更多数据
+                        break;
+                    }
+                    
+                    const line = streamBuffer.substring(0, newlineIdx);
+                    streamBuffer = streamBuffer.substring(newlineIdx + 1);
+                    
+                    if (line.startsWith('PROGRESS:')) {
+                        console.log('收到PROGRESS行:', line);
+                        try {
+                            const progressData = JSON.parse(line.replace('PROGRESS:', ''));
+                            console.log('解析后的PROGRESS数据:', progressData);
+                            
+                            // 更新进度条
+                            updateProgress(progressData.percentage, progressData.message);
+                            
+                            // 如果需要隐藏进度条
+                            if (progressData.hide) {
+                                setTimeout(() => {
+                                    progressBarContainer.classList.add('hidden');
+                                }, 1000);
+                                // 分析完成，自动刷新用户积分
+                                refreshUserInfo();
+                            }
+                        } catch (error) {
+                            console.error('解析PROGRESS数据失败:', error);
+                            console.error('原始PROGRESS行:', line);
+                        }
+                    } else if (line.startsWith('ANALYSIS_ID:')) {
+                        const analysisId = line.replace('ANALYSIS_ID:', '');
+                        console.log('收到分析ID:', analysisId);
+                        currentAnalysisData.id = analysisId;
                     } else if (line.startsWith('TEXT:')) {
                         const text = line.replace('TEXT:', '');
                         if (text) {
@@ -2984,6 +3053,38 @@
                 <div class="card p-4 mt-4">
                     <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">📊 主力资金净流入历史（最近60日，可滑动查看更多）</h5>
                     <div id="mainFundChart" style="width:100%;height:420px;"></div>
+                </div>
+                
+                <!-- 暗盘资金估算走势图 -->
+                <div class="card p-4 mt-4">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">📊 暗盘资金估算分析（隐藏机构资金追踪）</h5>
+                    <p class="text-xs text-gray-400 mb-3">通过中单、小单资金流推算可能存在的隐藏机构资金，用于判断是否存在隐藏吸筹或机构对倒等行为</p>
+                    <div id="darkMoneyChart" style="width:100%;height:420px;"></div>
+                    <div id="darkMoneyChartEmpty" class="hidden text-center py-10 text-gray-400">
+                        暂无暗盘资金数据
+                    </div>
+                </div>
+                
+                <!-- 持仓成本分布图（筹码分布图） -->
+                <div class="card p-4 mt-4" id="chipDistributionSection">
+                    <h5 class="text-md font-bold mb-3 text-gray-600 dark:text-gray-400">📊 持仓成本分布分析（筹码分布图）</h5>
+                    <div class="mb-3 flex items-center gap-4 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">选择日期：</span>
+                            <input type="range" id="chipDateSlider" min="0" max="0" value="0" class="w-48 cursor-pointer">
+                            <span id="chipSelectedDate" class="text-sm font-medium text-blue-500">-</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="inline-block w-3 h-3 rounded" style="background-color: rgba(59, 130, 246, 0.6);"></span>
+                            <span class="text-xs text-gray-500">全市场筹码</span>
+                            <span class="inline-block w-3 h-3 rounded ml-2" style="background-color: rgba(239, 68, 68, 0.8);"></span>
+                            <span class="text-xs text-gray-500">主力筹码</span>
+                        </div>
+                    </div>
+                    <div id="chipChart" style="width:100%;height:520px;"></div>
+                    <div id="chipChartEmpty" class="hidden text-center py-10 text-gray-400">
+                        暂无筹码分布数据
+                    </div>
                 </div>
                 </div>`;
         }
@@ -3659,16 +3760,17 @@
                 
                 // 绘制主力资金净流入历史图表（ECharts）
                 const mainFundChartDom = document.getElementById('mainFundChart');
+                
+                // 获取历史主力资金数据（提前定义，供多个图表使用）
+                let historyMainFundData = [];
+                if (stockData['历史主力资金'] && Array.isArray(stockData['历史主力资金'])) {
+                    historyMainFundData = stockData['历史主力资金'];
+                } else if (data['历史主力资金'] && Array.isArray(data['历史主力资金'])) {
+                    historyMainFundData = data['历史主力资金'];
+                }
+                
                 if (mainFundChartDom && typeof echarts !== 'undefined') {
                     console.log('准备绘制主力资金净流入历史图表...');
-                    
-                    // 获取历史主力资金数据
-                    let historyMainFundData = [];
-                    if (stockData['历史主力资金'] && Array.isArray(stockData['历史主力资金'])) {
-                        historyMainFundData = stockData['历史主力资金'];
-                    } else if (data['历史主力资金'] && Array.isArray(data['历史主力资金'])) {
-                        historyMainFundData = data['历史主力资金'];
-                    }
                     
                     if (historyMainFundData.length > 0) {
                         // 销毁旧图表实例
@@ -3931,6 +4033,597 @@
                         console.log('没有历史主力资金数据，跳过绘制');
                         mainFundChartDom.innerHTML = '<div style="text-align:center;padding:50px;color:#8b949e;">暂无历史主力资金数据</div>';
                     }
+                }
+                
+                // 绘制暗盘资金估算走势图
+                const darkMoneyChartDom = document.getElementById('darkMoneyChart');
+                const darkMoneyChartEmpty = document.getElementById('darkMoneyChartEmpty');
+                
+                if (darkMoneyChartDom && historyMainFundData.length > 0 && typeof echarts !== 'undefined') {
+                    console.log('准备绘制暗盘资金估算走势图...');
+                    
+                    // 销毁旧图表实例
+                    if (window.darkMoneyChartInstance) {
+                        window.darkMoneyChartInstance.dispose();
+                    }
+                    
+                    // 创建新的ECharts实例
+                    window.darkMoneyChartInstance = echarts.init(darkMoneyChartDom);
+                    
+                    // 准备图表数据
+                    const darkDates = historyMainFundData.map(item => item.date);
+                    const mainMoneyValues = historyMainFundData.map(item => item.net);
+                    const darkMoneyValues = historyMainFundData.map(item => item.dark || 0);
+                    const divergenceValues = historyMainFundData.map(item => item.divergence || 0);
+                    
+                    // 计算默认显示的数据范围（最近60日）
+                    const darkTotalDays = darkDates.length;
+                    const darkDefaultShowDays = Math.min(60, darkTotalDays);
+                    const darkStartPercent = darkTotalDays > darkDefaultShowDays ? ((darkTotalDays - darkDefaultShowDays) / darkTotalDays * 100) : 0;
+                    
+                    // 判断当前主题
+                    const isDarkTheme = document.body.getAttribute('data-theme') === 'dark';
+                    const textColor = isDarkTheme ? '#c9d1d9' : '#1f2328';
+                    const gridColor = isDarkTheme ? '#30363d' : '#e5e7eb';
+                    
+                    // 格式化金额函数
+                    function formatDarkAmount(value) {
+                        const absVal = Math.abs(value);
+                        if (absVal >= 100000000) {
+                            return (value / 100000000).toFixed(2) + '亿';
+                        } else if (absVal >= 10000) {
+                            return (value / 10000).toFixed(2) + '万';
+                        } else {
+                            return value.toFixed(0) + '元';
+                        }
+                    }
+                    
+                    // 图表配置
+                    const darkOption = {
+                        backgroundColor: 'transparent',
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'cross'
+                            },
+                            formatter: function(params) {
+                                const dataIndex = params[0].dataIndex;
+                                const date = darkDates[dataIndex];
+                                const mainMoney = mainMoneyValues[dataIndex];
+                                const darkMoney = darkMoneyValues[dataIndex];
+                                const divergence = divergenceValues[dataIndex];
+                                
+                                // 获取暗盘强度
+                                const darkStrength = historyMainFundData[dataIndex].darkStrength || 0;
+                                
+                                // 判断暗盘强度等级
+                                let strengthLevel = '';
+                                let strengthColor = '#8b949e';
+                                if (darkStrength >= 0.06) {
+                                    strengthLevel = '强吸筹';
+                                    strengthColor = '#ef4444';
+                                } else if (darkStrength >= 0.03) {
+                                    strengthLevel = '明显';
+                                    strengthColor = '#f59e0b';
+                                } else if (darkStrength >= 0.01) {
+                                    strengthLevel = '可能';
+                                    strengthColor = '#3b82f6';
+                                } else {
+                                    strengthLevel = '无暗盘';
+                                    strengthColor = '#8b949e';
+                                }
+                                
+                                // 判断趋势
+                                let trendHint = '';
+                                if (dataIndex > 0) {
+                                    const prevMain = mainMoneyValues[dataIndex - 1];
+                                    const prevDark = darkMoneyValues[dataIndex - 1];
+                                    
+                                    // 主力资金下降，暗盘资金上升
+                                    if (mainMoney < prevMain && darkMoney > prevDark) {
+                                        trendHint = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #30363d;color:#f59e0b;">⚠️ 可能存在机构隐藏吸筹</div>';
+                                    }
+                                    // 主力资金上升，暗盘资金下降
+                                    else if (mainMoney > prevMain && darkMoney < prevDark) {
+                                        trendHint = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #30363d;color:#ef4444;">⚠️ 可能存在机构对倒出货</div>';
+                                    }
+                                    // 同向变动
+                                    else if (mainMoney > 0 && darkMoney > 0) {
+                                        trendHint = '<div style="margin-top:8px;padding-top:6px;border-top:1px solid #30363d;color:#22c55e;">✅ 主力与暗盘资金同向变动</div>';
+                                    }
+                                }
+                                
+                                const mainColor = mainMoney >= 0 ? '#ef4444' : '#22c55e';
+                                const darkColor = darkMoney >= 0 ? '#3b82f6' : '#22c55e';
+                                const divColor = divergence >= 0 ? '#f59e0b' : '#a855f7';
+                                const mainSign = mainMoney >= 0 ? '+' : '';
+                                const darkSign = darkMoney >= 0 ? '+' : '';
+                                const divSign = divergence >= 0 ? '+' : '';
+                                
+                                return `<div style="padding: 10px; min-width: 260px;">
+                                    <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #30363d; padding-bottom: 6px;">📅 日期：${date}</div>
+                                    <div style="margin-bottom: 4px;">
+                                        <span style="display: inline-block; width: 10px; height: 10px; background: #ef4444; border-radius: 2px; margin-right: 6px;"></span>
+                                        主力资金：<span style="color: ${mainColor}; font-weight: bold;">${mainSign}${formatDarkAmount(mainMoney)}</span>
+                                    </div>
+                                    <div style="margin-bottom: 4px;">
+                                        <span style="display: inline-block; width: 10px; height: 10px; background: #3b82f6; border-radius: 2px; margin-right: 6px;"></span>
+                                        暗盘资金：<span style="color: ${darkColor}; font-weight: bold;">${darkSign}${formatDarkAmount(darkMoney)}</span>
+                                    </div>
+                                    <div style="margin-bottom: 4px;">
+                                        <span style="display: inline-block; width: 10px; height: 10px; background: #f59e0b; border-radius: 2px; margin-right: 6px;"></span>
+                                        资金背离：<span style="color: ${divColor}; font-weight: bold;">${divSign}${formatDarkAmount(divergence)}</span>
+                                    </div>
+                                    <div style="margin-bottom: 4px; color: #8b949e;">
+                                        暗盘强度：<span style="color: ${strengthColor}; font-weight: bold;">${(darkStrength * 100).toFixed(2)}%</span> (${strengthLevel})
+                                    </div>
+                                    ${trendHint}
+                                </div>`;
+                            }
+                        },
+                        legend: {
+                            data: ['主力资金净流入', '暗盘资金估算', '资金背离'],
+                            top: 10,
+                            textStyle: {
+                                color: textColor
+                            }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '4%',
+                            bottom: '15%',
+                            top: '15%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'category',
+                            data: darkDates,
+                            axisLabel: {
+                                color: textColor,
+                                rotate: 45,
+                                fontSize: 10
+                            },
+                            axisLine: {
+                                lineStyle: {
+                                    color: gridColor
+                                }
+                            }
+                        },
+                        yAxis: {
+                            type: 'value',
+                            name: '资金金额',
+                            nameTextStyle: {
+                                color: textColor
+                            },
+                            axisLabel: {
+                                color: textColor,
+                                formatter: function(value) {
+                                    return formatDarkAmount(value);
+                                }
+                            },
+                            axisLine: {
+                                lineStyle: {
+                                    color: gridColor
+                                }
+                            },
+                            splitLine: {
+                                lineStyle: {
+                                    color: gridColor,
+                                    type: 'dashed'
+                                }
+                            }
+                        },
+                        dataZoom: [
+                            {
+                                type: 'slider',
+                                show: true,
+                                start: darkStartPercent,
+                                end: 100,
+                                height: 20,
+                                bottom: 10,
+                                borderColor: gridColor,
+                                textStyle: {
+                                    color: textColor
+                                },
+                                handleStyle: {
+                                    color: '#58a6ff'
+                                },
+                                dataBackground: {
+                                    lineStyle: {
+                                        color: '#58a6ff'
+                                    },
+                                    areaStyle: {
+                                        color: 'rgba(88, 166, 255, 0.3)'
+                                    }
+                                }
+                            },
+                            {
+                                type: 'inside',
+                                start: darkStartPercent,
+                                end: 100,
+                                zoomOnMouseWheel: true,
+                                moveOnMouseMove: true
+                            }
+                        ],
+                        series: [
+                            {
+                                name: '主力资金净流入',
+                                type: 'line',
+                                data: mainMoneyValues,
+                                smooth: true,
+                                lineStyle: {
+                                    color: '#ef4444',
+                                    width: 2
+                                },
+                                itemStyle: {
+                                    color: '#ef4444'
+                                },
+                                symbol: 'none',
+                                areaStyle: {
+                                    color: {
+                                        type: 'linear',
+                                        x: 0,
+                                        y: 0,
+                                        x2: 0,
+                                        y2: 1,
+                                        colorStops: [
+                                            { offset: 0, color: 'rgba(239, 68, 68, 0.3)' },
+                                            { offset: 1, color: 'rgba(239, 68, 68, 0.05)' }
+                                        ]
+                                    }
+                                }
+                            },
+                            {
+                                name: '暗盘资金估算',
+                                type: 'line',
+                                data: darkMoneyValues,
+                                smooth: true,
+                                lineStyle: {
+                                    color: '#3b82f6',
+                                    width: 2
+                                },
+                                itemStyle: {
+                                    color: '#3b82f6'
+                                },
+                                symbol: 'none',
+                                areaStyle: {
+                                    color: {
+                                        type: 'linear',
+                                        x: 0,
+                                        y: 0,
+                                        x2: 0,
+                                        y2: 1,
+                                        colorStops: [
+                                            { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                                            { offset: 1, color: 'rgba(59, 130, 246, 0.05)' }
+                                        ]
+                                    }
+                                }
+                            },
+                            {
+                                name: '资金背离',
+                                type: 'line',
+                                data: divergenceValues,
+                                smooth: true,
+                                lineStyle: {
+                                    color: '#f59e0b',
+                                    width: 2
+                                },
+                                itemStyle: {
+                                    color: '#f59e0b'
+                                },
+                                symbol: 'none'
+                            }
+                        ]
+                    };
+                    
+                    window.darkMoneyChartInstance.setOption(darkOption);
+                    console.log('暗盘资金估算走势图绘制成功，共' + darkTotalDays + '天数据');
+                } else {
+                    // 没有暗盘资金数据
+                    if (darkMoneyChartDom) darkMoneyChartDom.style.display = 'none';
+                    if (darkMoneyChartEmpty) darkMoneyChartEmpty.classList.remove('hidden');
+                    console.log('没有历史主力资金数据，跳过暗盘资金图表绘制');
+                }
+                
+                // 绘制筹码分布图（持仓成本分布图）
+                const chipChartDom = document.getElementById('chipChart');
+                const chipChartEmpty = document.getElementById('chipChartEmpty');
+                const chipDateSlider = document.getElementById('chipDateSlider');
+                const chipSelectedDate = document.getElementById('chipSelectedDate');
+                
+                // 获取筹码分布历史数据
+                let chipDistributionHistory = null;
+                if (stockData['筹码分布历史'] && Object.keys(stockData['筹码分布历史']).length > 0) {
+                    chipDistributionHistory = stockData['筹码分布历史'];
+                } else if (data['chipDistributionHistory'] && Object.keys(data['chipDistributionHistory']).length > 0) {
+                    chipDistributionHistory = data['chipDistributionHistory'];
+                }
+                
+                if (chipChartDom && chipDistributionHistory && typeof echarts !== 'undefined') {
+                    console.log('准备绘制筹码分布图...');
+                    
+                    // 获取日期列表（按时间排序）
+                    const chipDates = Object.keys(chipDistributionHistory).sort();
+                    
+                    if (chipDates.length > 0) {
+                        // 显示图表，隐藏空状态
+                        chipChartDom.style.display = 'block';
+                        if (chipChartEmpty) chipChartEmpty.classList.add('hidden');
+                        
+                        // 设置滑动条
+                        if (chipDateSlider) {
+                            chipDateSlider.max = chipDates.length - 1;
+                            chipDateSlider.value = chipDates.length - 1; // 默认显示最新日期
+                        }
+                        
+                        // 初始化图表实例
+                        if (window.chipChartInstance) {
+                            window.chipChartInstance.dispose();
+                        }
+                        window.chipChartInstance = echarts.init(chipChartDom);
+                        
+                        // 存储数据供滑动条使用
+                        window.chipDistributionData = {
+                            dates: chipDates,
+                            history: chipDistributionHistory
+                        };
+                        
+                        // 绘制默认日期的图表
+                        const defaultDate = chipDates[chipDates.length - 1];
+                        updateChipChart(defaultDate, chipDistributionHistory[defaultDate]);
+                        
+                        // 更新日期显示
+                        if (chipSelectedDate) {
+                            chipSelectedDate.textContent = defaultDate;
+                        }
+                        
+                        // 绑定滑动条事件
+                        if (chipDateSlider) {
+                            chipDateSlider.oninput = function() {
+                                const idx = parseInt(this.value);
+                                const selectedDate = chipDates[idx];
+                                if (chipDistributionHistory[selectedDate]) {
+                                    updateChipChart(selectedDate, chipDistributionHistory[selectedDate]);
+                                    if (chipSelectedDate) {
+                                        chipSelectedDate.textContent = selectedDate;
+                                    }
+                                }
+                            };
+                        }
+                        
+                        console.log('筹码分布图绘制成功，共' + chipDates.length + '天数据');
+                    } else {
+                        // 没有数据
+                        chipChartDom.style.display = 'none';
+                        if (chipChartEmpty) chipChartEmpty.classList.remove('hidden');
+                    }
+                } else {
+                    // 没有筹码分布数据
+                    if (chipChartDom) chipChartDom.style.display = 'none';
+                    if (chipChartEmpty) chipChartEmpty.classList.remove('hidden');
+                    console.log('没有筹码分布数据，跳过绘制');
+                }
+                
+                // 筹码分布图更新函数
+                function updateChipChart(date, dayData) {
+                    if (!window.chipChartInstance || !dayData || !dayData.c) return;
+                    
+                    // 适配新的简化数据格式: {p: currentPrice, c: [[price, all, main], ...]}
+                    const chips = dayData.c;
+                    const currentPrice = dayData.p;
+                    
+                    // 价格从低到高排序（新格式chips已经是数组 [price, all, main]）
+                    chips.sort((a, b) => a[0] - b[0]);
+                    
+                    // 准备图表数据
+                    const prices = chips.map(c => c[0].toFixed(2));
+                    const allChips = chips.map(c => c[1]);
+                    const mainChips = chips.map(c => c[2]);
+                    
+                    // 判断当前主题
+                    const isDark = document.body.getAttribute('data-theme') === 'dark';
+                    const textColor = isDark ? '#c9d1d9' : '#1f2328';
+                    const gridColor = isDark ? '#30363d' : '#e5e7eb';
+                    
+                    // 格式化数量函数
+                    function formatChipAmount(value) {
+                        if (value >= 100000000) {
+                            return (value / 100000000).toFixed(2) + '亿';
+                        } else if (value >= 10000) {
+                            return (value / 10000).toFixed(2) + '万';
+                        } else {
+                            return value.toFixed(0);
+                        }
+                    }
+                    
+                    // 图表配置
+                    const option = {
+                        backgroundColor: 'transparent',
+                        title: {
+                            text: '持仓成本分布',
+                            subtext: '日期: ' + date + ' | 当前价格: ' + currentPrice,
+                            left: 'center',
+                            textStyle: {
+                                color: textColor,
+                                fontSize: 14
+                            },
+                            subtextStyle: {
+                                color: isDark ? '#8b949e' : '#6b7280',
+                                fontSize: 12
+                            }
+                        },
+                        tooltip: {
+                            trigger: 'axis',
+                            axisPointer: {
+                                type: 'shadow'
+                            },
+                            formatter: function(params) {
+                                const dataIndex = params[0].dataIndex;
+                                const chip = chips[dataIndex];
+                                // 新格式: [price, all, main]
+                                const price = chip[0];
+                                const all = chip[1];
+                                const main = chip[2];
+                                const mainRatio = all > 0 ? (main / all * 100).toFixed(1) : 0;
+                                
+                                // 判断当前价格位置
+                                let priceStatus = '';
+                                if (currentPrice) {
+                                    if (price < currentPrice * 0.9) {
+                                        priceStatus = '<span style="color: #22c55e;">(获利盘区)</span>';
+                                    } else if (price > currentPrice * 1.1) {
+                                        priceStatus = '<span style="color: #ef4444;">(套牢盘区)</span>';
+                                    } else {
+                                        priceStatus = '<span style="color: #f59e0b;">(成本区)</span>';
+                                    }
+                                }
+                                
+                                return `<div style="padding: 10px; min-width: 220px;">
+                                    <div style="font-weight: bold; margin-bottom: 8px; border-bottom: 1px solid #30363d; padding-bottom: 6px;">
+                                        💰 价格：${price.toFixed(2)} ${priceStatus}
+                                    </div>
+                                    <div style="margin-bottom: 4px;">
+                                        <span style="display: inline-block; width: 10px; height: 10px; background: rgba(59, 130, 246, 0.6); border-radius: 2px; margin-right: 6px;"></span>
+                                        全部持仓筹码：${formatChipAmount(all)}
+                                    </div>
+                                    <div style="margin-bottom: 4px;">
+                                        <span style="display: inline-block; width: 10px; height: 10px; background: rgba(239, 68, 68, 0.8); border-radius: 2px; margin-right: 6px;"></span>
+                                        主力筹码：${formatChipAmount(main)}
+                                    </div>
+                                    <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #30363d;">
+                                        <span style="color: #8b949e;">主力占比：</span>
+                                        <span style="color: #ef4444; font-weight: bold;">${mainRatio}%</span>
+                                    </div>
+                                </div>`;
+                            }
+                        },
+                        legend: {
+                            data: ['全市场筹码', '主力筹码'],
+                            top: 40,
+                            textStyle: {
+                                color: textColor
+                            }
+                        },
+                        grid: {
+                            left: '3%',
+                            right: '8%',
+                            bottom: '10%',
+                            top: '20%',
+                            containLabel: true
+                        },
+                        xAxis: {
+                            type: 'value',
+                            name: '筹码数量',
+                            nameTextStyle: {
+                                color: textColor
+                            },
+                            axisLabel: {
+                                color: textColor,
+                                formatter: function(value) {
+                                    return formatChipAmount(value);
+                                }
+                            },
+                            axisLine: {
+                                lineStyle: {
+                                    color: gridColor
+                                }
+                            },
+                            splitLine: {
+                                lineStyle: {
+                                    color: gridColor,
+                                    type: 'dashed'
+                                }
+                            }
+                        },
+                        yAxis: {
+                            type: 'category',
+                            data: prices,
+                            name: '价格',
+                            nameTextStyle: {
+                                color: textColor
+                            },
+                            axisLabel: {
+                                color: textColor,
+                                fontSize: 10
+                            },
+                            axisLine: {
+                                lineStyle: {
+                                    color: gridColor
+                                }
+                            },
+                            inverse: true // 价格从低到高（从下到上）
+                        },
+                        series: [
+                            {
+                                name: '全市场筹码',
+                                type: 'bar',
+                                data: allChips,
+                                barWidth: '50%',
+                                itemStyle: {
+                                    color: {
+                                        type: 'linear',
+                                        x: 0,
+                                        y: 0,
+                                        x2: 1,
+                                        y2: 0,
+                                        colorStops: [
+                                            { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                                            { offset: 1, color: 'rgba(59, 130, 246, 0.6)' }
+                                        ]
+                                    }
+                                },
+                                z: 1
+                            },
+                            {
+                                name: '主力筹码',
+                                type: 'bar',
+                                data: mainChips,
+                                barWidth: '50%',
+                                itemStyle: {
+                                    color: {
+                                        type: 'linear',
+                                        x: 0,
+                                        y: 0,
+                                        x2: 1,
+                                        y2: 0,
+                                        colorStops: [
+                                            { offset: 0, color: 'rgba(239, 68, 68, 0.5)' },
+                                            { offset: 1, color: 'rgba(239, 68, 68, 0.8)' }
+                                        ]
+                                    }
+                                },
+                                z: 2
+                            }
+                        ]
+                    };
+                    
+                    // 添加当前价格标记线
+                    if (currentPrice) {
+                        option.markLine = {
+                            silent: true,
+                            symbol: 'none',
+                            label: {
+                                show: true,
+                                position: 'end',
+                                formatter: '当前价: ' + currentPrice,
+                                color: '#f59e0b'
+                            },
+                            lineStyle: {
+                                color: '#f59e0b',
+                                type: 'dashed',
+                                width: 2
+                            },
+                            data: [{
+                                yAxis: currentPrice.toFixed(2)
+                            }]
+                        };
+                        
+                        // 将markLine添加到第一个series
+                        option.series[0].markLine = option.markLine;
+                    }
+                    
+                    window.chipChartInstance.setOption(option, true);
                 }
             } else {
                 console.log('没有资金流向数据，跳过绘制资金流向图表');
@@ -4745,12 +5438,24 @@
         if (window.mainFundChartInstance) {
             window.mainFundChartInstance.resize();
         }
+        if (window.chipChartInstance) {
+            window.chipChartInstance.resize();
+        }
+        if (window.darkMoneyChartInstance) {
+            window.darkMoneyChartInstance.resize();
+        }
     }
     
     // 窗口大小改变时重新调整图表
     window.addEventListener('resize', function() {
         if (window.mainFundChartInstance) {
             window.mainFundChartInstance.resize();
+        }
+        if (window.chipChartInstance) {
+            window.chipChartInstance.resize();
+        }
+        if (window.darkMoneyChartInstance) {
+            window.darkMoneyChartInstance.resize();
         }
     });
     
