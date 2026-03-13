@@ -1017,6 +1017,31 @@ function getHistoryMainFundFlow($fullCode, $days = 120) {
         $raw = curl_exec($ch);
         curl_close($ch);
         
+        // 获取K线数据用于计算成交额和涨跌幅
+        $klineData = [];
+        $klineUrl = "https://push2his.eastmoney.com/api/qt/stock/kline/get?secid={$secid}&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61&klt=101&fqt=1&beg=0&end=20500101";
+        $ch2 = curl_init($klineUrl);
+        curl_setopt($ch2, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch2, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch2, CURLOPT_SSL_VERIFYPEER, false);
+        $klineRaw = curl_exec($ch2);
+        curl_close($ch2);
+        
+        if ($klineRaw) {
+            $klineJson = json_decode($klineRaw, true);
+            if ($klineJson && isset($klineJson['data']['klines'])) {
+                foreach ($klineJson['data']['klines'] as $kl) {
+                    $kp = explode(',', $kl);
+                    if (count($kp) >= 9) {
+                        $klineData[$kp[0]] = [
+                            'amount' => floatval($kp[6]),    // 成交额
+                            'pctChange' => floatval($kp[8])   // 涨跌幅
+                        ];
+                    }
+                }
+            }
+        }
+        
         if ($raw) {
             $data = json_decode($raw, true);
             if ($data && isset($data['data']['klines'])) {
@@ -1025,10 +1050,64 @@ function getHistoryMainFundFlow($fullCode, $days = 120) {
                 foreach ($klines as $kline) {
                     $parts = explode(',', $kline);
                     if (count($parts) >= 12) {
-                        $netInflow = isset($parts[1]) ? floatval($parts[1]) : 0;
+                        // 字段说明：
+                        // parts[0]: 日期
+                        // parts[1]: 主力净流入-净额 (Main)
+                        // parts[2]: 小单净流入-净额 (Small)
+                        // parts[3]: 小单净流入-占比
+                        // parts[4]: 中单净流入-净额 (Mid)
+                        // parts[5]: 中单净流入-占比
+                        // parts[6]: 大单净流入-净额 (Big)
+                        // parts[7]: 大单净流入-占比
+                        // parts[8]: 超大单净流入-净额
+                        // parts[9]: 超大单净流入-占比
+                        // parts[10]: 主力净流入-占比
+                        // parts[11]: 收盘价
+                        
+                        $date = $parts[0];
+                        $mainNet = isset($parts[1]) ? floatval($parts[1]) : 0;  // 主力净流入
+                        $smallNet = isset($parts[2]) ? floatval($parts[2]) : 0; // 小单净流入
+                        $midNet = isset($parts[4]) ? floatval($parts[4]) : 0;   // 中单净流入
+                        $bigNet = isset($parts[6]) ? floatval($parts[6]) : 0;   // 大单净流入
+                        
+                        // 获取成交额和涨跌幅
+                        $turnover = isset($klineData[$date]['amount']) ? $klineData[$date]['amount'] : 0;
+                        $pctChange = isset($klineData[$date]['pctChange']) ? $klineData[$date]['pctChange'] : 0;
+                        
+                        // 计算暗盘资金（新公式）
+                        // BaseDark = Mid*0.3 + Small*0.1 + Large*0.6
+                        // PriceFactor = 1 + (Pct / 10)
+                        // MainContribution = max(0, -Main)  主力净流出贡献
+                        // DarkMoney = (BaseDark + MainContribution) * PriceFactor
+                        
+                        $baseDark = ($midNet * 0.3) + ($smallNet * 0.1) + ($bigNet * 0.6);
+                        $priceFactor = 1 + ($pctChange / 10);
+                        
+                        // 主力净流出贡献（Main < 0 时为正值）
+                        $mainContribution = max(0, -$mainNet);
+                        
+                        $darkMoney = ($baseDark + $mainContribution) * $priceFactor;
+                        
+                        // 防止负值
+                        if ($darkMoney < 0) {
+                            $darkMoney = 0;
+                        }
+                        
+                        // 计算暗盘强度和资金背离
+                        $darkStrength = $turnover > 0 ? ($darkMoney / $turnover) : 0;
+                        $divergence = $darkMoney - $mainNet;
+                        
                         $historyData[] = [
-                            'date' => $parts[0],
-                            'net' => $netInflow
+                            'date' => $date,
+                            'net' => $mainNet,
+                            'mid' => $midNet,
+                            'small' => $smallNet,
+                            'big' => $bigNet,
+                            'turnover' => $turnover,
+                            'pct' => $pctChange,
+                            'dark' => $darkMoney,
+                            'darkStrength' => $darkStrength,
+                            'divergence' => $divergence
                         ];
                     }
                 }
@@ -1666,15 +1745,22 @@ function calculateChipConcentration($chipPeaks, $currentPrice) {
     }
     
     usort($chipPeaks, function($a, $b) {
-        return $b['占比'] <=> $a['占比'];
+        $pctA = $a['占比'] ?? $a['成交量占比'] ?? 0;
+        $pctB = $b['占比'] ?? $b['成交量占比'] ?? 0;
+        return $pctB <=> $pctA;
     });
     
     $totalPct = 0;
     $prices = [];
     
     foreach ($chipPeaks as $peak) {
-        $totalPct += $peak['占比'];
-        $prices[] = $peak['中心价格'];
+        $pct = $peak['占比'] ?? $peak['成交量占比'] ?? 0;
+        $price = $peak['中心价格'] ?? $peak['平均价格'] ?? null;
+        
+        if ($pct > 0 && $price !== null) {
+            $totalPct += $pct;
+            $prices[] = $price;
+        }
         if ($totalPct >= 90) break;
     }
     
@@ -2102,6 +2188,153 @@ function calculateChipDistribution($klineData, $currentPrice, $bins = 300) {
             '成交量占比' => $peak['占比'],
             '平均价格' => $peak['中心价格'],
             '成交量' => $peak['成交量']
+        ];
+    }
+    
+    return $result;
+}
+
+/**
+ * 计算历史筹码分布数据（用于筹码分布图）
+ * 为每个交易日生成筹码分布数据，支持最近60个交易日
+ * @param array $klineData K线数据
+ * @param int $days 需要计算的天数（默认30天，减少数据量）
+ * @return array 按日期分组的筹码分布数据
+ */
+function calculateHistoricalChipDistribution($klineData, $days = 30) {
+    if (empty($klineData) || count($klineData) < 10) {
+        return [];
+    }
+    
+    $n = count($klineData);
+    $result = [];
+    
+    $closes = array_column($klineData, 'close');
+    $highs = array_column($klineData, 'high');
+    $lows = array_column($klineData, 'low');
+    $volumes = array_column($klineData, 'volume');
+    $dates = array_column($klineData, 'date');
+    
+    $priceMin = min($lows);
+    $priceMax = max($highs);
+    
+    if ($priceMax <= $priceMin) {
+        return [];
+    }
+    
+    // 计算分箱：目标200份，但最小颗粒度为0.01元（1分）
+    $targetBins = 500;
+    $priceRange = $priceMax - $priceMin;
+    $naturalBinWidth = $priceRange / $targetBins;
+    
+    // 如果自然分箱宽度小于1分，则按1分作为最小颗粒度
+    if ($naturalBinWidth < 0.01) {
+        $binWidth = 0.01;
+        $bins = (int)ceil($priceRange / $binWidth);
+    } else {
+        $binWidth = $naturalBinWidth;
+        $bins = $targetBins;
+    }
+    
+    $startIdx = max(0, $n - $days);
+    
+    for ($dayIdx = $startIdx; $dayIdx < $n; $dayIdx++) {
+        $currentDate = $dates[$dayIdx];
+        $currentPrice = $closes[$dayIdx];
+        
+        $chipDistribution = array_fill(0, $bins, 0);
+        $mainChipDistribution = array_fill(0, $bins, 0);
+        
+        $decayFactor = 0.98;
+        $mainVolumeRatio = 0.3;
+        
+        for ($i = 0; $i <= $dayIdx; $i++) {
+            $daysFromNow = $dayIdx - $i;
+            $timeWeight = pow($decayFactor, $daysFromNow);
+            
+            $high = $highs[$i];
+            $low = $lows[$i];
+            $close = $closes[$i];
+            $volume = $volumes[$i];
+            
+            $weightedVolume = $volume * $timeWeight;
+            
+            // 计算主力比例
+            $avgVolume = 0;
+            $volumeWindow = 20;
+            $volStart = max(0, $i - $volumeWindow + 1);
+            $volSlice = array_slice($volumes, $volStart, $i - $volStart + 1);
+            if (count($volSlice) > 0) {
+                $avgVolume = array_sum($volSlice) / count($volSlice);
+            }
+            
+            if ($avgVolume > 0 && $volume > $avgVolume * 1.5) {
+                $mainRatio = min(0.6, ($volume / $avgVolume - 1) * 0.3 + $mainVolumeRatio);
+            } else {
+                $mainRatio = $mainVolumeRatio * 0.5;
+            }
+            
+            // 将当天成交量分布到最高价和最低价之间的所有价格区间
+            // 使用正态分布，以收盘价为中心，标准差为振幅的1/3
+            $dayRange = $high - $low;
+            $stdDev = max($dayRange / 3, $binWidth); // 标准差至少为一个分箱宽度
+            
+            // 计算涉及的分箱范围
+            $lowBinIdx = max(0, (int)(($low - $priceMin) / $binWidth));
+            $highBinIdx = min($bins - 1, (int)(($high - $priceMin) / $binWidth));
+            
+            // 如果振幅太小（如一字板），只分配到收盘价
+            if ($dayRange < $binWidth * 0.5) {
+                $binIdx = min((int)(($close - $priceMin) / $binWidth), $bins - 1);
+                $binIdx = max(0, $binIdx);
+                $chipDistribution[$binIdx] += $weightedVolume;
+                $mainChipDistribution[$binIdx] += $weightedVolume * $mainRatio;
+            } else {
+                // 使用正态分布将成交量分配到各价格区间
+                $totalWeight = 0;
+                $binWeights = [];
+                
+                for ($b = $lowBinIdx; $b <= $highBinIdx; $b++) {
+                    $binPrice = $priceMin + ($b + 0.5) * $binWidth;
+                    // 正态分布权重
+                    $weight = exp(-0.5 * pow(($binPrice - $close) / $stdDev, 2));
+                    $binWeights[$b] = $weight;
+                    $totalWeight += $weight;
+                }
+                
+                // 归一化并分配成交量
+                if ($totalWeight > 0) {
+                    for ($b = $lowBinIdx; $b <= $highBinIdx; $b++) {
+                        $fraction = $binWeights[$b] / $totalWeight;
+                        $chipDistribution[$b] += $weightedVolume * $fraction;
+                        $mainChipDistribution[$b] += $weightedVolume * $fraction * $mainRatio;
+                    }
+                }
+            }
+        }
+        
+        $chips = [];
+        for ($i = 0; $i < $bins; $i++) {
+            if ($chipDistribution[$i] > 0) {
+                $priceLow = $priceMin + $i * $binWidth;
+                $priceHigh = $priceMin + ($i + 1) * $binWidth;
+                $priceCenter = ($priceLow + $priceHigh) / 2;
+                
+                $chips[] = [
+                    round($priceCenter, 2),
+                    (int)round($chipDistribution[$i]),
+                    (int)round($mainChipDistribution[$i])
+                ];
+            }
+        }
+        
+        usort($chips, function($a, $b) {
+            return $a[0] <=> $b[0];
+        });
+        
+        $result[$currentDate] = [
+            'p' => round($currentPrice, 2),
+            'c' => $chips
         ];
     }
     
@@ -3658,6 +3891,17 @@ try {
 // 发送进度信息：资讯获取完成
 sendProgress(55, '股票最新资讯获取完成，正在准备AI分析...');
 
+// 计算历史筹码分布数据（用于筹码分布图）
+$chipDistributionHistory = [];
+try {
+    if (!empty($klineData) && count($klineData) >= 10) {
+        $chipDistributionHistory = calculateHistoricalChipDistribution($klineData, 60);
+    }
+} catch (Exception $e) {
+    error_log('计算历史筹码分布数据失败: ' . $e->getMessage());
+    $chipDistributionHistory = [];
+}
+
 // 整合所有数据
 $enhancedMarketData = array_merge($marketData, [
     '板块信息' => $sectorData,
@@ -3665,11 +3909,12 @@ $enhancedMarketData = array_merge($marketData, [
     '历史主力资金' => $historyMainFundData,
     '技术指标' => $technicalIndicators,
     '港股信息' => $hkData,
-    '主力成本区' => $mainForceCostData
+    '主力成本区' => $mainForceCostData,
+    '筹码分布历史' => $chipDistributionHistory
 ]);
 
 // 1. 发送行情数据表格给前端
-echo "DATA:" . json_encode(['stockData' => $enhancedMarketData, 'indexData' => $shIndexData, 'newsData' => $stockNews, 'hkData' => $hkData, 'mainForceCostData' => $mainForceCostData], JSON_UNESCAPED_UNICODE) . "\n";
+echo "DATA:" . json_encode(['stockData' => $enhancedMarketData, 'indexData' => $shIndexData, 'newsData' => $stockNews, 'hkData' => $hkData, 'mainForceCostData' => $mainForceCostData, 'chipDistributionHistory' => $chipDistributionHistory], JSON_UNESCAPED_UNICODE) . "\n";
 sseFlush();
 
 // 检查是否是"只获取数据"模式
