@@ -233,8 +233,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     // 开启隐式刷新
     @ob_implicit_flush(true);
 
-    // 增加PHP执行时间限制
-    set_time_limit(120);
+    // 增加PHP执行时间限制（AI分析可能需要较长时间）
+    set_time_limit(500);
 
 
 
@@ -357,6 +357,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     ]);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 280); // 设置超时时间，略小于PHP执行时间限制
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30); // 连接超时时间
 
     // 用于存储操作决策分析结果
     $fundDirectorResult = '';
@@ -479,8 +481,8 @@ while (ob_get_level()) {
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') exit;
 
-// 增加PHP执行时间限制
-set_time_limit(120);
+// 增加PHP执行时间限制（AI分析可能需要较长时间）
+set_time_limit(300);
 
 // 检查用户登录状态
 $user = isset($_SESSION['user']) ? $_SESSION['user'] : null;
@@ -4099,6 +4101,8 @@ curl_setopt($ch, CURLOPT_HTTPHEADER, [
 ]);
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
 curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch, CURLOPT_TIMEOUT, 280); // 设置超时时间，略小于PHP执行时间限制
+curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30); // 连接超时时间
 // 用于存储AI分析结果
 $aiResult = '';
 
@@ -4124,6 +4128,13 @@ curl_setopt($ch, CURLOPT_WRITEFUNCTION, function($ch, $data) use (&$aiResult) {
 curl_exec($ch);
 curl_close($ch);
 
+// 检查AI分析结果是否为空
+logDebug('AI分析结果长度: ' . strlen($aiResult) . ' 字符', $user['id']);
+if (empty($aiResult)) {
+    logDebug('警告: AI分析结果为空', $user['id']);
+    $aiResult = '分析结果获取失败，请稍后重试';
+}
+
 // 再次从数据库获取最新的用户信息，确保积分正确
 $conn = Database::getConnection();
 $userId = $user['id'];
@@ -4144,6 +4155,32 @@ logSystemAction('stock_analysis', "用户 {$user['username']} (ID: {$user['id']}
 
 // 保存分析记录到数据库
 logDebug('开始保存分析记录到数据库', $user['id']);
+
+// JSON编码数据，使用JSON_UNESCAPED_UNICODE确保中文正确编码
+$marketDataJson = json_encode($enhancedMarketData, JSON_UNESCAPED_UNICODE);
+$indexDataJson = json_encode($shIndexData, JSON_UNESCAPED_UNICODE);
+$newsDataJson = json_encode($stockNews, JSON_UNESCAPED_UNICODE);
+$sectorDataJson = json_encode($sectorData, JSON_UNESCAPED_UNICODE);
+$moneyFlowDataJson = json_encode($moneyFlowData, JSON_UNESCAPED_UNICODE);
+$technicalDataJson = json_encode($technicalIndicators, JSON_UNESCAPED_UNICODE);
+$reviewDataJson = json_encode($parsedReviewData, JSON_UNESCAPED_UNICODE);
+$minuteDataJson = json_encode($minuteData, JSON_UNESCAPED_UNICODE);
+$mainForceCostDataJson = json_encode($mainForceCostData, JSON_UNESCAPED_UNICODE);
+
+// 检查JSON编码是否成功
+if ($marketDataJson === false) {
+    logDebug('JSON编码失败 (enhancedMarketData): ' . json_last_error_msg(), $user['id']);
+    $marketDataJson = '{}';
+}
+if ($indexDataJson === false) {
+    logDebug('JSON编码失败 (shIndexData): ' . json_last_error_msg(), $user['id']);
+    $indexDataJson = '{}';
+}
+if ($newsDataJson === false) {
+    logDebug('JSON编码失败 (stockNews): ' . json_last_error_msg(), $user['id']);
+    $newsDataJson = '{}';
+}
+
 $analysisId = Database::saveStockAnalysis(
     $user['id'], 
     $symbol, 
@@ -4152,17 +4189,17 @@ $analysisId = Database::saveStockAnalysis(
     $cost, 
     $cash, 
     $model, 
-    json_encode($enhancedMarketData), 
-    json_encode($shIndexData), 
-    json_encode($stockNews), 
+    $marketDataJson, 
+    $indexDataJson, 
+    $newsDataJson, 
     $aiResult,
-    json_encode($sectorData),
-    json_encode($moneyFlowData),
-    json_encode($technicalIndicators),
-    json_encode($parsedReviewData),
+    $sectorDataJson,
+    $moneyFlowDataJson,
+    $technicalDataJson,
+    $reviewDataJson,
     null, // fund_director_content
-    json_encode($minuteData),
-    json_encode($mainForceCostData)
+    $minuteDataJson,
+    $mainForceCostDataJson
 );
 logDebug('保存分析记录结果: ' . ($analysisId ? '成功，ID: ' . $analysisId : '失败'), $user['id']);
 
